@@ -140,6 +140,16 @@ final class CreateFakeQalityClient implements QalityClient
         return [];
     }
 
+    public function listStatuses(): array
+    {
+        return [];
+    }
+
+    public function updateTestExecution(string $executionId, array $fields): array
+    {
+        return [];
+    }
+
     public function createTestExecution(array $payload): array
     {
         return [];

@@ -14,6 +14,7 @@ final class ServiceProviderTest extends TestCase
     public function test_the_package_merges_configuration_and_registers_api_clients(): void
     {
         self::assertSame(1, config('qality.results.schema_version'));
+        self::assertSame('QAlity Test', config('qality.publisher.linking.type'));
         self::assertInstanceOf(QalityClient::class, $this->app->make(QalityClient::class));
         self::assertInstanceOf(JiraClient::class, $this->app->make(JiraClient::class));
     }

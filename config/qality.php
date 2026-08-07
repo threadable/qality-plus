@@ -38,7 +38,7 @@ return [
         'retry_backoff_ms' => (int) env('QALITY_HTTP_RETRY_BACKOFF_MS', 250),
         'linking' => [
             'enabled' => (bool) env('QALITY_JIRA_LINKS_ENABLED', false),
-            'type' => env('QALITY_JIRA_LINK_TYPE'),
+            'type' => env('QALITY_JIRA_LINK_TYPE', 'QAlity Test'),
             'direction' => env('QALITY_JIRA_LINK_DIRECTION', 'test_to_requirement'),
         ],
     ],

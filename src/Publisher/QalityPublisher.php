@@ -48,6 +48,7 @@ final class QalityPublisher
             );
         }
 
+        $statusIds = $this->statusIds($this->qality->listStatuses());
         $cycleId = $cycleId ?: $this->configuredCycleId();
 
         if ($cycleId === null) {
@@ -79,31 +80,34 @@ final class QalityPublisher
         }
 
         $cycleCases = $this->qality->addTestCasesToCycle($cycleId, array_values($issueIds));
-        $cycleCaseIds = $this->cycleCaseIds($cycleCases, $issueIds);
+        $executionIds = $this->executionIds($cycleCases, $issueIds);
         $linked = 0;
         $published = 0;
 
         foreach ($mapped as $record) {
             $metadata = $record['qality'];
             $issueKey = (string) $metadata['issue_key'];
-            $payload = [
-                'name' => (string) ($record['test']['name'] ?? $record['test']['id']),
-                'status' => $this->status((string) $record['status']),
-                'testCaseId' => (int) $issueIds[$issueKey],
-                'testSteps' => [],
+            $executionId = $executionIds[$issueKey] ?? null;
+
+            if ($executionId === null) {
+                throw new PublisherException(sprintf(
+                    'QAlity did not return an execution for test case [%s] in cycle [%s].',
+                    $issueKey,
+                    $cycleId,
+                ));
+            }
+
+            $fields = [
+                'statusId' => $statusIds[$this->statusCategory((string) $record['status'])],
             ];
 
-            if (isset($cycleCaseIds[$issueKey])) {
-                $payload['testCaseInCycleId'] = $cycleCaseIds[$issueKey];
-            }
-
             if (isset($record['details']['message']) && is_string($record['details']['message'])) {
-                $payload['comment'] = $record['details']['message'];
+                $fields['comment'] = $record['details']['message'];
             } elseif (isset($record['details']['message']) && is_array($record['details']['message'])) {
-                $payload['comment'] = (string) ($record['details']['message']['message'] ?? '');
+                $fields['comment'] = (string) ($record['details']['message']['message'] ?? '');
             }
 
-            $this->qality->createTestExecution($payload);
+            $this->qality->updateTestExecution($executionId, $fields);
             $published++;
 
             if ($this->linkingEnabled() && is_string($metadata['requirement_issue_key'] ?? null)) {
@@ -151,14 +155,62 @@ final class QalityPublisher
         return (bool) ($this->options['linking']['enabled'] ?? false);
     }
 
-    private function status(string $status): string
+    private function statusCategory(string $status): string
     {
         return match ($status) {
-            'passed' => 'passed',
-            'failed', 'error', 'risky' => 'failed',
-            'skipped', 'incomplete' => 'unexecuted',
+            'passed' => 'PASSED',
+            'failed', 'error', 'risky' => 'FAILED',
+            'skipped', 'incomplete' => 'UNFINISHED',
             default => throw new PublisherException('Unsupported PHPUnit result status ['.$status.'].')
         };
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, int>
+     */
+    private function statusIds(array $payload): array
+    {
+        $statuses = $payload['statuses'] ?? $payload['data'] ?? $payload;
+
+        if (! is_array($statuses)) {
+            throw new PublisherException('QAlity status response was invalid.');
+        }
+
+        $ids = [];
+        $priorities = [];
+
+        foreach ($statuses as $status) {
+            if (! is_array($status)) {
+                continue;
+            }
+
+            $category = strtoupper((string) ($status['category'] ?? ''));
+            $id = $status['id'] ?? null;
+
+            if (! in_array($category, ['PASSED', 'FAILED', 'UNFINISHED'], true) || ! is_numeric($id)) {
+                continue;
+            }
+
+            $name = strtolower(trim((string) ($status['name'] ?? '')));
+            $priority = match ($name) {
+                'passed', 'failed', 'unexecuted' => 0,
+                default => 1,
+            };
+
+            if (! isset($priorities[$category]) || $priority < $priorities[$category]) {
+                $ids[$category] = (int) $id;
+                $priorities[$category] = $priority;
+            }
+        }
+
+        foreach (['PASSED', 'FAILED', 'UNFINISHED'] as $category) {
+            if (! isset($ids[$category])) {
+                throw new PublisherException(sprintf('QAlity status category [%s] is not configured.', $category));
+            }
+        }
+
+        return $ids;
     }
 
     /**
@@ -179,18 +231,19 @@ final class QalityPublisher
      * @param  list<array<string, mixed>>  $cycleCases
      * @return array<string, string>
      */
-    private function cycleCaseIds(array $cycleCases, array $issueIds): array
+    private function executionIds(array $cycleCases, array $issueIds): array
     {
         $ids = [];
 
         foreach ($cycleCases as $case) {
             $testCaseId = $case['testCaseId'] ?? $case['test_case_id'] ?? null;
-            $cycleCaseId = $case['id'] ?? $case['testCaseInCycleId'] ?? $case['test_case_in_cycle_id'] ?? null;
+            $execution = $case['testExecution'] ?? $case['test_execution'] ?? null;
+            $executionId = is_array($execution) ? ($execution['id'] ?? null) : null;
 
-            if (is_scalar($testCaseId) && is_scalar($cycleCaseId)) {
+            if (is_scalar($testCaseId) && is_scalar($executionId)) {
                 foreach ($issueIds as $issueKey => $issueId) {
                     if ((string) $issueId === (string) $testCaseId) {
-                        $ids[$issueKey] = (string) $cycleCaseId;
+                        $ids[$issueKey] = (string) $executionId;
                         break;
                     }
                 }

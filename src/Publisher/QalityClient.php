@@ -24,6 +24,17 @@ interface QalityClient
     public function addTestCasesToCycle(string $cycleId, array $testCaseIds): array;
 
     /**
+     * @return array<string, mixed>
+     */
+    public function listStatuses(): array;
+
+    /**
+     * @param  array<string, mixed>  $fields
+     * @return array<string, mixed>
+     */
+    public function updateTestExecution(string $executionId, array $fields): array;
+
+    /**
      * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
      */

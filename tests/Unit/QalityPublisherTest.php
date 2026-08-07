@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Threadable\QalityPlus\Tests\Unit;
 
 use Threadable\QalityPlus\Publisher\JiraClient;
+use Threadable\QalityPlus\Publisher\PublisherException;
 use Threadable\QalityPlus\Publisher\QalityClient;
 use Threadable\QalityPlus\Publisher\QalityPublisher;
 use Threadable\QalityPlus\Tests\TestCase;
@@ -30,8 +31,9 @@ final class QalityPublisherTest extends TestCase
 
         self::assertSame('cycle-1', $summary->cycleId);
         self::assertSame(1, $summary->published);
-        self::assertSame('failed', $qality->executions[0]['status']);
-        self::assertSame(10001, $qality->executions[0]['testCaseId']);
+        self::assertSame('execution-0', $qality->executions[0]['executionId']);
+        self::assertSame(2, $qality->executions[0]['fields']['statusId']);
+        self::assertSame('Expected failure', $qality->executions[0]['fields']['comment']);
         self::assertSame(['10001'], $qality->addedCaseIds);
     }
 
@@ -46,6 +48,75 @@ final class QalityPublisherTest extends TestCase
 
         self::assertSame(1, $summary->skipped);
         self::assertSame(0, $qality->cycleCreates);
+    }
+
+    public function test_it_maps_all_supported_phpunit_outcomes_to_qality_statuses(): void
+    {
+        $qality = new FakeQalityClient;
+        $publisher = new QalityPublisher($qality, new FakeJiraClient, [
+            'project_id' => '20001',
+            'linking' => ['enabled' => false],
+        ]);
+        $records = [];
+
+        foreach (['passed', 'failed', 'error', 'risky', 'skipped', 'incomplete'] as $index => $status) {
+            $records[] = [
+                'status' => $status,
+                'test' => ['id' => 'Example::test_'.$index, 'name' => 'test_'.$index],
+                'qality' => ['issue_key' => 'QA-'.$index],
+            ];
+        }
+
+        $summary = $publisher->publish($records);
+
+        self::assertSame(6, $summary->published);
+        self::assertSame(
+            [1, 2, 2, 2, 3, 3],
+            array_map(static fn (array $execution): int => $execution['fields']['statusId'], $qality->executions),
+        );
+    }
+
+    public function test_it_creates_requirement_links_only_when_missing(): void
+    {
+        $qality = new FakeQalityClient;
+        $jira = new FakeJiraClient;
+        $publisher = new QalityPublisher($qality, $jira, [
+            'project_id' => '20001',
+            'linking' => [
+                'enabled' => true,
+                'type' => 'Tests',
+                'direction' => 'test_to_requirement',
+            ],
+        ]);
+        $record = [[
+            'status' => 'passed',
+            'test' => ['id' => 'Example::test_checkout', 'name' => 'test_checkout'],
+            'qality' => [
+                'issue_key' => 'QA-123',
+                'requirement_issue_key' => 'REQ-42',
+            ],
+        ]];
+
+        self::assertSame(1, $publisher->publish($record)->linked);
+        self::assertSame([['QA-123', 'REQ-42', 'Tests', 'test_to_requirement']], $jira->createdLinks);
+
+        $jira->linkExists = true;
+        self::assertSame(0, $publisher->publish($record, cycleId: 'cycle-1')->linked);
+        self::assertCount(1, $jira->createdLinks);
+    }
+
+    public function test_it_rejects_an_unknown_phpunit_status(): void
+    {
+        $publisher = new QalityPublisher(new FakeQalityClient, new FakeJiraClient, [
+            'project_id' => '20001',
+        ]);
+
+        $this->expectException(PublisherException::class);
+        $publisher->publish([[
+            'status' => 'unknown',
+            'test' => ['id' => 'Example::test'],
+            'qality' => ['issue_key' => 'QA-123'],
+        ]]);
     }
 }
 
@@ -75,28 +146,79 @@ final class FakeQalityClient implements QalityClient
     {
         $this->addedCaseIds = $testCaseIds;
 
-        return [['id' => 'cycle-case-1', 'testCaseId' => 10001]];
+        return array_map(
+            static fn (string $testCaseId, int $index): array => [
+                'id' => 'cycle-case-'.$index,
+                'testCaseId' => (int) $testCaseId,
+                'testExecution' => ['id' => 'execution-'.$index],
+            ],
+            $testCaseIds,
+            array_keys($testCaseIds),
+        );
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    public function listStatuses(): array
+    {
+        return [
+            'statuses' => [
+                ['id' => 1, 'name' => 'Passed', 'category' => 'PASSED'],
+                ['id' => 2, 'name' => 'Failed', 'category' => 'FAILED'],
+                ['id' => 3, 'name' => 'Unexecuted', 'category' => 'UNFINISHED'],
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $fields
+     * @return array<string, mixed>
+     */
+    public function updateTestExecution(string $executionId, array $fields): array
+    {
+        $this->executions[] = [
+            'executionId' => $executionId,
+            'fields' => $fields,
+        ];
+
+        return ['id' => $executionId];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
     public function createTestExecution(array $payload): array
     {
-        $this->executions[] = $payload;
-
         return ['id' => 'execution-1'];
     }
 }
 
 final class FakeJiraClient implements JiraClient
 {
+    public bool $linkExists = false;
+
+    /** @var array<string, string> */
+    private array $issueIds = [];
+
+    /** @var list<list<string>> */
+    public array $createdLinks = [];
+
     public function issue(string $issueKey): array
     {
-        return ['id' => '10001', 'key' => $issueKey];
+        $this->issueIds[$issueKey] ??= (string) (10001 + count($this->issueIds));
+
+        return ['id' => $this->issueIds[$issueKey], 'key' => $issueKey];
     }
 
     public function issueLinkExists(string $testIssueKey, string $requirementIssueKey, string $linkType): bool
     {
-        return false;
+        return $this->linkExists;
     }
 
-    public function createIssueLink(string $testIssueKey, string $requirementIssueKey, string $linkType, string $direction = 'test_to_requirement'): void {}
+    public function createIssueLink(string $testIssueKey, string $requirementIssueKey, string $linkType, string $direction = 'test_to_requirement'): void
+    {
+        $this->createdLinks[] = [$testIssueKey, $requirementIssueKey, $linkType, $direction];
+    }
 }

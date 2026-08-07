@@ -7,6 +7,7 @@ namespace Threadable\QalityPlus\Tests\Unit;
 use Illuminate\Support\Facades\Http;
 use Threadable\QalityPlus\Publisher\HttpJiraClient;
 use Threadable\QalityPlus\Publisher\HttpQalityClient;
+use Threadable\QalityPlus\Publisher\PublisherException;
 use Threadable\QalityPlus\Tests\TestCase;
 
 final class HttpClientsTest extends TestCase
@@ -31,7 +32,7 @@ final class HttpClientsTest extends TestCase
     public function test_qality_imports_test_cases_with_the_project_id(): void
     {
         Http::fake([
-            'https://qality.test/api/import-test-cases' => Http::response([
+            'https://qality.test/api/testCases/import' => Http::response([
                 'success' => [['testCaseKey' => 'QA-123', 'name' => 'test_checkout']],
                 'errors' => [],
             ], 200),
@@ -45,7 +46,7 @@ final class HttpClientsTest extends TestCase
 
         self::assertSame('QA-123', $result['success'][0]['testCaseKey']);
         Http::assertSent(static function ($request): bool {
-            return $request->url() === 'https://qality.test/api/import-test-cases'
+            return $request->url() === 'https://qality.test/api/testCases/import'
                 && $request->data() === [
                     'projectId' => '20001',
                     'testCases' => [[
@@ -95,5 +96,114 @@ final class HttpClientsTest extends TestCase
         );
 
         self::assertSame('cycle-1', $client->createTestCycle('CI run', '20001')['id']);
+    }
+
+    public function test_qality_adds_cases_to_a_cycle_and_updates_an_execution(): void
+    {
+        Http::fake([
+            'https://qality.test/api/testCycles/cycle-1/testCycleAssignments' => Http::response([
+                [
+                    'id' => 'cycle-case-1',
+                    'testCaseId' => 10001,
+                    'testExecution' => ['id' => 'execution-1'],
+                ],
+            ]),
+            'https://qality.test/api/statuses' => Http::response([
+                'statuses' => [
+                    ['id' => 1, 'name' => 'Passed', 'category' => 'PASSED'],
+                ],
+            ]),
+            'https://qality.test/api/testExecutions/execution-1' => Http::response(['id' => 'execution-1']),
+        ]);
+
+        $client = new HttpQalityClient('https://qality.test/api', 'qality-token');
+
+        self::assertSame(
+            [[
+                'id' => 'cycle-case-1',
+                'testCaseId' => 10001,
+                'testExecution' => ['id' => 'execution-1'],
+            ]],
+            $client->addTestCasesToCycle('cycle-1', ['10001']),
+        );
+        self::assertSame(
+            ['statuses' => [['id' => 1, 'name' => 'Passed', 'category' => 'PASSED']]],
+            $client->listStatuses(),
+        );
+        self::assertSame(
+            ['id' => 'execution-1'],
+            $client->updateTestExecution('execution-1', ['statusId' => 1]),
+        );
+
+        Http::assertSent(static fn ($request): bool => $request->url() === 'https://qality.test/api/testCycles/cycle-1/testCycleAssignments'
+            && $request->data() === [
+                'testCasesIds' => [10001],
+            ]);
+        Http::assertSent(static fn ($request): bool => $request->method() === 'PATCH'
+            && $request->url() === 'https://qality.test/api/testExecutions/execution-1'
+            && $request->data() === ['fields' => ['statusId' => 1]]);
+    }
+
+    public function test_qality_fails_when_the_token_is_missing(): void
+    {
+        $this->expectException(PublisherException::class);
+
+        (new HttpQalityClient('https://qality.test/api', ''))->createTestCycle('CI run', '20001');
+    }
+
+    public function test_jira_fails_when_credentials_are_missing(): void
+    {
+        $this->expectException(PublisherException::class);
+
+        (new HttpJiraClient('https://jira.test', null, null, null))->issue('QA-123');
+    }
+
+    public function test_non_retryable_http_failures_are_not_retried(): void
+    {
+        Http::fake([
+            'https://qality.test/api/testCycles' => Http::response(['error' => 'invalid project'], 422),
+        ]);
+
+        $client = new HttpQalityClient('https://qality.test/api', 'qality-token', retries: 3, retryBackoffMs: 0);
+
+        try {
+            $client->createTestCycle('CI run', '20001');
+            self::fail('Expected a PublisherException.');
+        } catch (PublisherException $exception) {
+            self::assertStringContainsString('HTTP 422', $exception->getMessage());
+        }
+
+        Http::assertSentCount(1);
+    }
+
+    public function test_exhausted_transient_failures_raise_an_exception(): void
+    {
+        Http::fakeSequence()
+            ->push(['error' => 'temporary'], 503)
+            ->push(['error' => 'temporary'], 503);
+
+        $client = new HttpQalityClient('https://qality.test/api', 'qality-token', retries: 1, retryBackoffMs: 0);
+
+        try {
+            $client->createTestCycle('CI run', '20001');
+            self::fail('Expected a PublisherException.');
+        } catch (PublisherException) {
+            self::assertTrue(true);
+        }
+
+        Http::assertSentCount(2);
+    }
+
+    public function test_jira_rejects_an_invalid_link_direction(): void
+    {
+        $client = new HttpJiraClient(
+            baseUrl: 'https://jira.test',
+            email: 'ci@example.com',
+            apiToken: 'jira-token',
+            bearerToken: null,
+        );
+
+        $this->expectException(PublisherException::class);
+        $client->createIssueLink('QA-123', 'REQ-42', 'Tests', 'sideways');
     }
 }

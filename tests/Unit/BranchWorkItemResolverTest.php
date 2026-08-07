@@ -32,4 +32,11 @@ final class BranchWorkItemResolverTest extends TestCase
 
         self::assertSame('ABC-12', $resolver->resolve('work/ABC-12'));
     }
+
+    public function test_custom_patterns_without_a_key_capture_are_rejected(): void
+    {
+        $this->expectException(PublisherException::class);
+
+        (new BranchWorkItemResolver('/^work\/([A-Z]+-\d+)$/'))->resolve('work/ABC-12');
+    }
 }

@@ -6,6 +6,7 @@
     <testsuites>
         <testsuite name="qality-plus">
             <directory>tests</directory>
+            <exclude>tests/Fixtures</exclude>
         </testsuite>
     </testsuites>
 </phpunit>

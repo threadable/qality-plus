@@ -25,7 +25,7 @@ final class HttpQalityClient extends HttpTransport implements QalityClient
      */
     public function importTestCases(string $projectId, array $testCases): array
     {
-        return $this->sendQality('POST', '/import-test-cases', [
+        return $this->sendQality('POST', '/testCases/import', [
             'projectId' => $projectId,
             'testCases' => array_values($testCases),
         ]);
@@ -47,17 +47,39 @@ final class HttpQalityClient extends HttpTransport implements QalityClient
 
     public function addTestCasesToCycle(string $cycleId, array $testCaseIds): array
     {
-        $payload = $this->sendQality('POST', '/testCasesInCycle', [
-            'testCases' => array_values(array_map('intval', $testCaseIds)),
-            'testCycleId' => $cycleId,
+        $payload = $this->sendQality('POST', "/testCycles/{$cycleId}/testCycleAssignments", [
+            'testCasesIds' => array_values(array_map('intval', $testCaseIds)),
         ]);
 
         return $this->listPayload($payload);
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    public function listStatuses(): array
+    {
+        return $this->send(
+            fn (): PendingRequest => $this->request(),
+            'GET',
+            '/statuses',
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $fields
+     * @return array<string, mixed>
+     */
+    public function updateTestExecution(string $executionId, array $fields): array
+    {
+        return $this->sendQality('PATCH', "/testExecutions/{$executionId}", [
+            'fields' => $fields,
+        ]);
+    }
+
     public function createTestExecution(array $payload): array
     {
-        return $this->sendQality('POST', '/testExecution', $payload);
+        return $this->sendQality('POST', '/testExecutions', $payload);
     }
 
     /**
