@@ -1,0 +1,123 @@
+# QAlity Plus for Laravel and PHPUnit
+
+This package records PHPUnit outcomes as versioned JSONL and publishes those
+records to QAlity Plus from CI. It uses native QAlity and Jira APIs
+
+## Installation
+
+```bash
+composer require threadable/qality-plus
+```
+
+Publish the package configuration when local overrides are needed:
+
+```bash
+php artisan vendor:publish --tag=qality-config
+```
+
+## PHPUnit extension
+
+Register the Composer-loaded extension in `phpunit.xml`:
+
+```xml
+<extensions>
+    <bootstrap class="Threadable\QalityPlus\PhpUnit\QalityPlusExtension">
+        <parameter name="directory" value="storage/qality"/>
+        <parameter name="schema_version" value="1"/>
+    </bootstrap>
+</extensions>
+```
+
+The extension adds no output replacement, so existing PHPUnit output and JUnit
+logging continue to work. Each completed test is appended to a file named like
+`qality-results.v1.<run-id>.jsonl`.
+
+Map a PHPUnit test to an existing QAlity test case with an attribute:
+
+```php
+use Threadable\QalityPlus\PhpUnit\QalityTestCase;
+
+#[QalityTestCase('QA-123', requirementIssueKey: 'REQ-42')]
+final class CheckoutTest extends TestCase
+{
+    public function test_checkout_can_be_completed(): void
+    {
+        // ...
+    }
+}
+```
+
+The attribute may also be placed on an individual test method. Tests without
+the attribute are recorded but skipped by the publisher.
+
+Pest tests can use an explicit JSON mapping file because Pest generates the
+underlying PHPUnit test method. Register it as an extension parameter:
+
+```xml
+<parameter name="mapping_file" value=".qality-test-map.json"/>
+```
+
+The file is keyed by the PHPUnit event test ID:
+
+```json
+{
+    "Pest\\Tests\\Feature\\CheckoutTest::it_can_checkout": {
+        "issue_key": "QA-123",
+        "requirement_issue_key": "REQ-42"
+    }
+}
+```
+
+Data-provider IDs may be mapped either exactly or by their base
+`Class::method` ID. Name-based inference is not performed.
+
+## CI publisher
+
+Configure credentials in environment variables or published configuration:
+
+```dotenv
+QALITY_PLUS_BASE_URL=https://apps-qalityplus.soldevelo.com/api
+QALITY_PLUS_API_TOKEN=...
+QALITY_PLUS_PROJECT_ID=...
+QALITY_JIRA_BASE_URL=https://example.atlassian.net
+QALITY_JIRA_EMAIL=ci@example.com
+QALITY_JIRA_API_TOKEN=...
+QALITY_JIRA_LINKS_ENABLED=false
+```
+
+Publish a result file or all versioned files in a directory:
+
+```bash
+php artisan qality:publish storage/qality
+php artisan qality:publish storage/qality/run.jsonl --cycle-id 12345
+php artisan qality:publish storage/qality --dry-run
+```
+
+The publisher creates a new cycle when no cycle ID is supplied. It resolves
+mapped Jira issues, adds them to the cycle, and creates native QAlity
+executions. Transient HTTP failures are retried with bounded exponential
+backoff; unresolved failures return a non-zero command status.
+
+## Create missing test cases from a branch
+
+Create QAlity test cases for JSONL results that do not already have a QAlity
+mapping, then link the new test-case issues to the Jira work item in the
+current branch:
+
+```bash
+php artisan qality:create-test-cases storage/qality
+php artisan qality:create-test-cases storage/qality/run.jsonl --branch feature/PROJ-123-checkout
+php artisan qality:create-test-cases storage/qality --dry-run
+```
+
+Branches must match `feature/KEY-123-description`, `hotfix/KEY-123-description`,
+or `bugfix/KEY-123-description` by default. Use `--branch` for detached-head
+CI jobs. The work-item pattern can be changed with `QALITY_BRANCH_PATTERN`;
+custom patterns must provide a named `key` capture group.
+
+The command uses the configured `QALITY_PLUS_PROJECT_ID` and Jira link settings
+(`QALITY_JIRA_LINK_TYPE` and `QALITY_JIRA_LINK_DIRECTION`). It records created
+case keys in `.qality-test-map.json` so rerunning the command does not create
+duplicates. Override that location with `QALITY_TEST_MAPPING_FILE` or
+`--mapping-file`. The command requires a configured Jira link type and fails
+before making API calls when the branch cannot provide a work-item key.

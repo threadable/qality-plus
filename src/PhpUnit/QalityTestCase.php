@@ -1,0 +1,35 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Threadable\QalityPlus\PhpUnit;
+
+use Attribute;
+
+#[Attribute(Attribute::TARGET_CLASS | Attribute::TARGET_METHOD)]
+final readonly class QalityTestCase
+{
+    public function __construct(
+        public string $issueKey,
+        public ?string $requirementIssueKey = null,
+        public ?string $linkType = null,
+        public ?string $linkDirection = null,
+    ) {
+        if (trim($issueKey) === '') {
+            throw new \InvalidArgumentException('The QAlity issue key cannot be empty.');
+        }
+    }
+
+    /**
+     * @return array<string, string|null>
+     */
+    public function toArray(): array
+    {
+        return [
+            'issue_key' => $this->issueKey,
+            'requirement_issue_key' => $this->requirementIssueKey,
+            'link_type' => $this->linkType,
+            'link_direction' => $this->linkDirection,
+        ];
+    }
+}

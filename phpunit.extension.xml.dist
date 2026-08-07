@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true">
+    <extensions>
+        <bootstrap class="Threadable\QalityPlus\PhpUnit\QalityPlusExtension">
+            <parameter name="directory" value="storage/qality"/>
+            <parameter name="schema_version" value="1"/>
+            <parameter name="run_id" value="extension-smoke"/>
+        </bootstrap>
+    </extensions>
+    <testsuites>
+        <testsuite name="qality-plus">
+            <directory>tests</directory>
+        </testsuite>
+    </testsuites>
+</phpunit>
