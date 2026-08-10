@@ -37,9 +37,9 @@ Map a PHPUnit test to an existing QAlity test case with an attribute:
 ```php
 use Threadable\QalityPlus\PhpUnit\QalityTestCase;
 
-#[QalityTestCase('QA-123', requirementIssueKey: 'REQ-42')]
 final class CheckoutTest extends TestCase
 {
+    #[QalityTestCase('QA-123', requirementIssueKey: 'REQ-42')]
     public function test_checkout_can_be_completed(): void
     {
         // ...
@@ -47,9 +47,8 @@ final class CheckoutTest extends TestCase
 }
 ```
 
-The attribute may also be placed on an individual test method; method-level
-metadata takes precedence over class-level metadata. Tests are always recorded.
-`qality:publish` skips records without an `issue_key`, while
+The attribute must be placed on an individual test method. Tests are always
+recorded. `qality:publish` skips records without an `issue_key`, while
 `qality:create-test-cases` can create missing cases from unmapped records.
 
 Pest tests can use an explicit JSON mapping file because Pest generates the

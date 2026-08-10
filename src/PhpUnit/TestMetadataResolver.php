@@ -6,7 +6,6 @@ namespace Threadable\QalityPlus\PhpUnit;
 
 use JsonException;
 use PHPUnit\Event\Code\Test;
-use ReflectionClass;
 use ReflectionMethod;
 use RuntimeException;
 
@@ -36,13 +35,6 @@ final class TestMetadataResolver
         $methodName = $test->methodName();
         $method = new ReflectionMethod($className, $methodName);
         $attribute = $method->getAttributes(QalityTestCase::class)[0] ?? null;
-
-        if ($attribute !== null) {
-            return $attribute->newInstance()->toArray();
-        }
-
-        $class = new ReflectionClass($className);
-        $attribute = $class->getAttributes(QalityTestCase::class)[0] ?? null;
 
         if ($attribute !== null) {
             return $attribute->newInstance()->toArray();
