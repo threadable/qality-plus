@@ -2,6 +2,11 @@
     "$schema": "https://getcomposer.org/schema.json",
     "name": "threadable/qality-plus",
     "description": "Laravel and PHPUnit integration for publishing automated test results to QAlity Plus.",
+    "homepage": "https://github.com/threadable/qality-plus",
+    "support": {
+        "issues": "https://github.com/threadable/qality-plus/issues",
+        "source": "https://github.com/threadable/qality-plus"
+    },
     "keywords": [
         "laravel",
         "phpunit",

@@ -1,7 +1,7 @@
 # QAlity Plus for Laravel and PHPUnit
 
-This package records PHPUnit outcomes as versioned JSONL and publishes those
-records to QAlity Plus from CI. It uses native QAlity and Jira APIs.
+This package records Laravel, PHPUnit, and Pest test results and publishes
+them to QAlity Plus and Jira from your CI/CD pipeline.
 
 ## Installation
 
@@ -9,15 +9,16 @@ records to QAlity Plus from CI. It uses native QAlity and Jira APIs.
 composer require threadable/qality-plus
 ```
 
-Publish the package configuration when local overrides are needed:
+The package is auto-discovered by Laravel. Publish the configuration only when
+you need to change a default:
 
 ```bash
 php artisan vendor:publish --tag=qality-config
 ```
 
-## PHPUnit extension
+## Setup
 
-Register the Composer-loaded extension in `phpunit.xml`:
+Register the PHPUnit extension in `phpunit.xml`:
 
 ```xml
 <extensions>
@@ -28,11 +29,31 @@ Register the Composer-loaded extension in `phpunit.xml`:
 </extensions>
 ```
 
-The extension adds no output replacement, so existing PHPUnit output and JUnit
-logging continue to work. Each completed test is appended to a file named like
-`qality-results.v1.<run-id>.jsonl`.
+Add these CI/CD variables:
 
-Map a PHPUnit test to an existing QAlity test case with an attribute:
+```dotenv
+QALITY_PLUS_API_TOKEN=...
+QALITY_PLUS_PROJECT_ID=...
+
+QALITY_JIRA_BASE_URL=https://example.atlassian.net
+QALITY_JIRA_EMAIL=ci@example.com
+QALITY_JIRA_API_TOKEN=...
+
+# Jira project containing the QAlity test cases
+QALITY_JIRA_PROJECT_KEY=QA
+```
+
+The Jira project key is used to find existing QAlity test cases by name. The
+default Jira test issue type is `QAlity Test`; override it with
+`QALITY_JIRA_TEST_ISSUE_TYPE` when necessary.
+
+For alternative authentication, explicit mappings, data providers, or other
+configuration options, see [Advanced configuration](docs/advanced-configuration.md).
+
+## Map tests to QAlity
+
+To use an existing QAlity test case, put the attribute on the individual test
+method:
 
 ```php
 use Threadable\QalityPlus\PhpUnit\QalityTestCase;
@@ -47,173 +68,83 @@ final class CheckoutTest extends TestCase
 }
 ```
 
-The attribute must be placed on an individual test method. Tests are always
-recorded. `qality:publish` skips records without an `issue_key`, while
-`qality:create-test-cases` can create missing cases from unmapped records.
+To create a missing case with a friendly name, provide only a name:
 
-Pest tests can use an explicit JSON mapping file because Pest generates the
-underlying PHPUnit test method. Register it as an extension parameter:
-
-```xml
-<parameter name="mapping_file" value=".qality-test-map.json"/>
-```
-
-The file is keyed by the PHPUnit event test ID:
-
-```json
+```php
+#[QalityTestCase(name: 'Customer can complete checkout')]
+public function test_checkout_can_be_completed(): void
 {
-    "Pest\\Tests\\Feature\\CheckoutTest::it_can_checkout": {
-        "issue_key": "QA-123",
-        "requirement_issue_key": "REQ-42"
-    }
+    // ...
 }
 ```
 
-Data-provider IDs may be mapped either exactly or by their base
-`Class::method` ID. Name-based inference is not performed.
+When no name is provided, the package uses the PHPUnit method name or Pest test
+description. If an issue key is already available, the case is treated as
+existing and its name is not changed.
 
-## CI publisher
+## CI/CD commands
 
-Configure these required `.env` variables for live command execution:
-
-```dotenv
-# QAlity Plus
-QALITY_PLUS_API_TOKEN=...
-QALITY_PLUS_PROJECT_ID=...
-
-# Jira: use either email + API token or a bearer token
-QALITY_JIRA_BASE_URL=https://example.atlassian.net
-QALITY_JIRA_EMAIL=ci@example.com
-QALITY_JIRA_API_TOKEN=...
-# QALITY_JIRA_BEARER_TOKEN=...
-```
-
-`QALITY_PLUS_PROJECT_ID` is required by `qality:create-test-cases` and by
-`qality:publish` when it creates a new cycle. It can be omitted for publishing
-when an existing cycle is supplied with `--cycle-id` or
-`QALITY_PLUS_CYCLE_ID`. Jira credentials are required by both commands because
-they read and create Jira issue links. The `--dry-run` variants only validate
-local JSONL data and do not require API credentials.
-
-`QALITY_JIRA_BEARER_TOKEN` is sent as an HTTP Bearer token and is an alternative
-to Jira email/API-token authentication. For Jira Cloud OAuth 2.0, set the base
-URL to the Atlassian API gateway URL for the site, such as
-`https://api.atlassian.com/ex/jira/<cloud-id>`. The package accepts an already
-issued token; it does not obtain or refresh OAuth tokens.
-
-Optional settings and their defaults are:
-
-```dotenv
-QALITY_PLUS_BASE_URL=https://apps-qalityplus.soldevelo.com/api
-QALITY_PLUS_CYCLE_ID=               # optional existing cycle
-QALITY_PLUS_CYCLE_NAME=             # optional new-cycle name
-QALITY_PLUS_CYCLE_COMMENT=          # optional new-cycle comment
-QALITY_RESULTS_DIRECTORY=storage/qality
-QALITY_TEST_MAPPING_FILE=.qality-test-map.json
-QALITY_JIRA_LINKS_ENABLED=false
-QALITY_JIRA_LINK_TYPE="QAlity Test"
-QALITY_JIRA_LINK_DIRECTION=test_to_requirement
-```
-
-`QALITY_JIRA_LINK_TYPE` is the Jira issue-link type **Name**, not its outward
-or inward description. For a Jira link configuration shown as
-`QAlity Test | tests | is tested by`, use `QAlity Test` as the type and
-`test_to_requirement` to make the requirement display `is tested by` the
-QAlity Test.
-
-Publish the default `storage/qality` results, or provide a result file/directory:
+Run the tests, then create or find the QAlity test cases on feature branches:
 
 ```bash
+php artisan test
+php artisan qality:create-test-cases --branch feature/PROJ-123-checkout
+```
+
+On QA, UAT, and production deployments, run the tests and publish their
+executions:
+
+```bash
+php artisan test
 php artisan qality:publish
-php artisan qality:publish storage/qality
-php artisan qality:publish storage/qality/run.jsonl --cycle-id 12345
+```
+
+Both commands use `storage/qality` by default. A different result file or
+directory can be supplied when needed. Use `--dry-run` to validate results
+without calling QAlity or Jira:
+
+```bash
+php artisan qality:create-test-cases --branch feature/PROJ-123-checkout --dry-run
 php artisan qality:publish --dry-run
 ```
 
-The publisher creates a new cycle when neither `--cycle-id` nor
-`QALITY_PLUS_CYCLE_ID` is supplied. It resolves mapped Jira issues, assigns
-their test cases to the cycle, and updates the
-executions QAlity creates for those assignments. Transient HTTP failures are
-retried with bounded exponential backoff; unresolved failures return a
-non-zero command status.
+The create command first looks for an exact Jira test-case name in the
+configured project. It creates a new case only when no matching case exists.
+The publish command uses the same lookup when a result has no issue key, so the
+feature pipeline does not need to transfer a mapping file to QA, UAT, or
+production when test names remain stable.
 
-## Create missing test cases from a branch
+Branches are expected to use `feature/KEY-123-description`,
+`hotfix/KEY-123-description`, or `bugfix/KEY-123-description`. Use `--branch`
+for CI systems where the branch cannot be detected automatically.
 
-Create QAlity test cases for JSONL results that do not already have a QAlity
-mapping, then link the new test-case issues to the Jira work item in the
-current branch:
+## Workflow
 
-```bash
-php artisan qality:create-test-cases --branch feature/PROJ-123-checkout
-php artisan qality:create-test-cases storage/qality/run.jsonl --branch feature/PROJ-123-checkout
-php artisan qality:create-test-cases --dry-run
-```
+| Pipeline stage | Command | Result |
+| --- | --- | --- |
+| Feature branch | `qality:create-test-cases` | Finds existing cases or creates missing cases and links new cases to the branch work item |
+| QA, UAT, production | `qality:publish` | Creates a QAlity Test Cycle and publishes passed, failed, and skipped executions |
 
-The result path is optional for both commands and defaults to the configured
-`QALITY_RESULTS_DIRECTORY` value, which defaults to `storage/qality`.
+Store QAlity and Jira credentials as secured CI/CD variables. The package does
+not require a particular CI/CD provider.
 
-Branches must match `feature/KEY-123-description`, `hotfix/KEY-123-description`,
-or `bugfix/KEY-123-description` by default. Use `--branch` for detached-head
-CI jobs. The work-item pattern can be changed with `QALITY_BRANCH_PATTERN`;
-custom patterns must provide a named `key` capture group.
+## Contributing
 
-The command uses the configured `QALITY_PLUS_PROJECT_ID`, Jira issue-link type,
-and link direction. The default Jira link type is `QAlity Test`; override it
-with `QALITY_JIRA_LINK_TYPE` when the Jira instance uses a different link type.
-Newly created cases are always linked to the branch work item;
-`QALITY_JIRA_LINKS_ENABLED` only controls optional requirement links while
-publishing existing cases. The command records created case keys in
-`.qality-test-map.json` so rerunning it does not create duplicates. Override
-that location with `QALITY_TEST_MAPPING_FILE` or `--mapping-file`. The command
-fails before making API calls when the branch cannot provide a work-item key.
-
-## Recommended CI/CD workflow
-
-The intended deployment flow separates test-case creation from test execution
-publishing:
-
-| Pipeline stage | QAlity Plus action |
-| --- | --- |
-| `feature/*` branch | Record JSONL, create missing test cases, and link them to the branch work item |
-| QA, UAT, or production deployment | Record JSONL, create a new QAlity Test Cycle, and publish executions for existing cases |
-
-Configure the PHPUnit extension with the persisted mapping file in every stage
-after feature cases have been accepted:
-
-```xml
-<parameter name="mapping_file" value=".qality-test-map.json"/>
-```
-
-The mapping file must be committed with the test changes or transferred to the
-later pipeline stage through an approved artifact or repository mechanism.
-The create command does not modify old JSONL records, and `qality:publish`
-will skip records whose current run does not contain an `issue_key`.
-
-A feature-branch step can pass its CI provider’s branch variable directly:
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development and pull-request
+guidelines. At minimum, install the dependencies and run the full quality
+check:
 
 ```bash
-composer install --prefer-dist --no-interaction
-php artisan test
-php artisan qality:create-test-cases --branch "$CI_BRANCH_NAME"
+composer install
+composer ci
 ```
 
-Replace `CI_BRANCH_NAME` with the branch variable provided by the selected
-CI/CD platform. Persist `storage/qality` and `.qality-test-map.json` using the
-platform’s artifacts, cache, workspace, repository, or deployment handoff
-mechanism as appropriate.
+Please include tests for behavior changes and open an issue before starting
+large changes.
 
-QA, UAT, and production deployment steps should run the test suite with the
-persisted mapping file and then publish the results without `--cycle-id` when a
-new cycle is required:
+Security issues should be reported privately as described in
+[SECURITY.md](SECURITY.md).
 
-```bash
-composer install --prefer-dist --no-interaction
-php artisan test
-php artisan qality:publish
-```
+## License
 
-Use the same deployment-stage commands for QA, UAT, and production. Passing
-`--cycle-id` is available when a pipeline must publish into an existing cycle.
-Store QAlity and Jira credentials as secured CI/CD variables or secret values.
-The package’s own CI workflow validates library compatibility; each consuming
-application can integrate these commands into its preferred CI/CD platform.
+This package is open-sourced software licensed under the [MIT license](LICENSE).
