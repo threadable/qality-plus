@@ -1,0 +1,6 @@
+{
+    "success": [
+        {"testCaseKey": "T2M-41", "name": "test_checkout"}
+    ],
+    "errors": []
+}

@@ -1,0 +1,9 @@
+{
+    "type": "object",
+    "required": ["name", "projectId"],
+    "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "projectId": {"type": ["string", "integer"]},
+        "comment": {"type": "string"}
+    }
+}

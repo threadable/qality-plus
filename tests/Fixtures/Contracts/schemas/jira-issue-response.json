@@ -1,0 +1,17 @@
+{
+    "type": "object",
+    "required": ["id", "key", "fields"],
+    "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "key": {"type": "string", "minLength": 1},
+        "fields": {
+            "type": "object",
+            "required": ["issuelinks", "project", "issuetype"],
+            "properties": {
+                "issuelinks": {"type": "array"},
+                "project": {"type": "object"},
+                "issuetype": {"type": "object"}
+            }
+        }
+    }
+}

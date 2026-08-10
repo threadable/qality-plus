@@ -1,0 +1,19 @@
+{
+    "type": "object",
+    "required": ["projectId", "testCases"],
+    "properties": {
+        "projectId": {"type": ["string", "integer"]},
+        "testCases": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+                "type": "object",
+                "required": ["name", "testSteps"],
+                "properties": {
+                    "name": {"type": "string", "minLength": 1},
+                    "testSteps": {"type": "array"}
+                }
+            }
+        }
+    }
+}

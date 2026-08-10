@@ -14,7 +14,7 @@ use Threadable\QalityPlus\Publisher\QalityPublisher;
 final class PublishQalityResultsCommand extends Command
 {
     protected $signature = 'qality:publish
-        {path : A JSONL result file or a directory containing versioned QAlity JSONL files}
+        {path? : A JSONL result file or directory; defaults to storage/qality}
         {--cycle-id= : Existing QAlity test cycle ID; otherwise a new cycle is created}
         {--dry-run : Validate and summarize without calling QAlity or Jira}';
 
@@ -24,7 +24,7 @@ final class PublishQalityResultsCommand extends Command
     {
         try {
             $records = (new JsonlResultReader((int) config('qality.results.schema_version', 1)))
-                ->readPath((string) $this->argument('path'));
+                ->readPath($this->resultsPath());
             $publisher = new QalityPublisher($qality, $jira, [
                 'project_id' => config('qality.qality.project_id'),
                 'cycle_id' => config('qality.qality.cycle_id'),
@@ -54,5 +54,12 @@ final class PublishQalityResultsCommand extends Command
         ));
 
         return self::SUCCESS;
+    }
+
+    private function resultsPath(): string
+    {
+        $path = config('qality.results.directory', storage_path('qality'));
+
+        return is_string($path) && trim($path) !== '' ? $path : storage_path('qality');
     }
 }

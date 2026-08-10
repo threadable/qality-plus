@@ -16,7 +16,7 @@ use Threadable\QalityPlus\Publisher\QalityClient;
 final class CreateQalityTestCasesCommand extends Command
 {
     protected $signature = 'qality:create-test-cases
-        {path : A JSONL result file or a directory containing versioned QAlity JSONL files}
+        {path? : A JSONL result file or directory; defaults to storage/qality}
         {--branch= : Git branch name; otherwise the current branch is detected}
         {--mapping-file= : JSON mapping file; defaults to .qality-test-map.json}
         {--dry-run : Validate and summarize without calling QAlity or Jira}';
@@ -32,7 +32,7 @@ final class CreateQalityTestCasesCommand extends Command
             $workItemKey = (new BranchWorkItemResolver((string) config('qality.create.branch_pattern')))
                 ->resolve($branch);
             $records = (new JsonlResultReader((int) config('qality.results.schema_version', 1)))
-                ->readPath((string) $this->argument('path'));
+                ->readPath($this->resultsPath());
             $mappingFile = $this->mappingFile();
             $linking = config('qality.publisher.linking', []);
             $service = new CreateTestCasesService($qality, $jira, [
@@ -77,5 +77,12 @@ final class CreateQalityTestCasesCommand extends Command
         }
 
         return function_exists('base_path') ? base_path($path) : getcwd().DIRECTORY_SEPARATOR.$path;
+    }
+
+    private function resultsPath(): string
+    {
+        $path = config('qality.results.directory', storage_path('qality'));
+
+        return is_string($path) && trim($path) !== '' ? $path : storage_path('qality');
     }
 }

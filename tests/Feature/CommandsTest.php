@@ -36,9 +36,9 @@ final class CommandsTest extends TestCase
     public function test_create_command_can_validate_results_through_the_testbench_application(): void
     {
         $this->writeResult('CheckoutTest::test_checkout', 'test_checkout');
+        config(['qality.results.directory' => $this->resultPath]);
 
         $this->artisan('qality:create-test-cases', [
-            'path' => $this->resultPath,
             '--branch' => 'feature/PROJ-123-checkout',
             '--dry-run' => true,
         ])
@@ -50,6 +50,7 @@ final class CommandsTest extends TestCase
     {
         $this->writeResult('CheckoutTest::test_checkout', 'test_checkout');
         config([
+            'qality.results.directory' => $this->resultPath,
             'qality.qality.base_url' => 'https://qality.test/api',
             'qality.qality.token' => 'qality-token',
             'qality.qality.project_id' => '20001',
@@ -70,7 +71,6 @@ final class CommandsTest extends TestCase
         ]);
 
         $this->artisan('qality:create-test-cases', [
-            'path' => $this->resultPath,
             '--branch' => 'feature/PROJ-123-checkout',
             '--mapping-file' => $this->mappingPath,
         ])
@@ -104,6 +104,7 @@ final class CommandsTest extends TestCase
             'requirement_issue_key' => 'PROJ-123',
         ]);
         config([
+            'qality.results.directory' => $this->resultPath,
             'qality.qality.base_url' => 'https://qality.test/api',
             'qality.qality.token' => 'qality-token',
             'qality.qality.project_id' => '20001',
@@ -137,7 +138,7 @@ final class CommandsTest extends TestCase
             'https://jira.test/rest/api/3/issueLink' => Http::response([], 201),
         ]);
 
-        $this->artisan('qality:publish', ['path' => $this->resultPath])
+        $this->artisan('qality:publish')
             ->expectsOutputToContain('Published 1 result(s); 1 published, 0 skipped, 1 Jira link(s) in cycle cycle-1.')
             ->assertExitCode(0);
 

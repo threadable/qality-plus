@@ -1,0 +1,15 @@
+{
+    "type": "object",
+    "required": ["fields"],
+    "properties": {
+        "fields": {
+            "type": "object",
+            "required": ["statusId"],
+            "properties": {
+                "statusId": {"type": "integer"},
+                "comment": {"type": "string"},
+                "executionAssignee": {"type": "string"}
+            }
+        }
+    }
+}

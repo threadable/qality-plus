@@ -1,0 +1,19 @@
+{
+    "type": "array",
+    "minItems": 1,
+    "items": {
+        "type": "object",
+        "required": ["id", "testCaseId", "testExecution"],
+        "properties": {
+            "id": {"type": "integer"},
+            "testCaseId": {"type": "integer"},
+            "testExecution": {
+                "type": "object",
+                "required": ["id"],
+                "properties": {
+                    "id": {"type": "integer"}
+                }
+            }
+        }
+    }
+}

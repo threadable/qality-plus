@@ -1,0 +1,21 @@
+{
+    "type": "object",
+    "required": ["type", "inwardIssue", "outwardIssue"],
+    "properties": {
+        "type": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {"name": {"type": "string", "minLength": 1}}
+        },
+        "inwardIssue": {
+            "type": "object",
+            "required": ["key"],
+            "properties": {"key": {"type": "string", "minLength": 1}}
+        },
+        "outwardIssue": {
+            "type": "object",
+            "required": ["key"],
+            "properties": {"key": {"type": "string", "minLength": 1}}
+        }
+    }
+}

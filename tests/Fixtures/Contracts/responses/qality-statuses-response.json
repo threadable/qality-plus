@@ -1,0 +1,9 @@
+{
+    "statuses": [
+        {"id": 77229, "name": "Passed", "category": "PASSED"},
+        {"id": 77230, "name": "Failed", "category": "FAILED"},
+        {"id": 77231, "name": "Blocked", "category": "UNFINISHED"},
+        {"id": 77232, "name": "In Progress", "category": "UNFINISHED"},
+        {"id": 77233, "name": "Unexecuted", "category": "UNFINISHED"}
+    ]
+}

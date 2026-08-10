@@ -1,0 +1,18 @@
+{
+    "type": "object",
+    "required": ["success", "errors"],
+    "properties": {
+        "success": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["testCaseKey", "name"],
+                "properties": {
+                    "testCaseKey": {"type": "string", "minLength": 1},
+                    "name": {"type": "string", "minLength": 1}
+                }
+            }
+        },
+        "errors": {"type": "array"}
+    }
+}

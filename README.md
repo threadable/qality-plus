@@ -73,15 +73,33 @@ Data-provider IDs may be mapped either exactly or by their base
 
 ## CI publisher
 
-Configure credentials in environment variables or published configuration:
+Configure these required `.env` variables for live command execution:
 
 ```dotenv
-QALITY_PLUS_BASE_URL=https://apps-qalityplus.soldevelo.com/api
+# QAlity Plus
 QALITY_PLUS_API_TOKEN=...
 QALITY_PLUS_PROJECT_ID=...
+
+# Jira: use either email + API token or a bearer token
 QALITY_JIRA_BASE_URL=https://example.atlassian.net
 QALITY_JIRA_EMAIL=ci@example.com
 QALITY_JIRA_API_TOKEN=...
+# QALITY_JIRA_BEARER_TOKEN=...
+```
+
+`QALITY_PLUS_PROJECT_ID` is required by `qality:create-test-cases` and by
+`qality:publish` when it creates a new cycle. It can be omitted for publishing
+when an existing cycle is supplied with `--cycle-id` or
+`QALITY_PLUS_CYCLE_ID`. Jira credentials are required by both commands because
+they read and create Jira issue links. The `--dry-run` variants only validate
+local JSONL data and do not require API credentials.
+
+Optional settings and their defaults are:
+
+```dotenv
+QALITY_PLUS_BASE_URL=https://apps-qalityplus.soldevelo.com/api
+QALITY_RESULTS_DIRECTORY=storage/qality
+QALITY_TEST_MAPPING_FILE=.qality-test-map.json
 QALITY_JIRA_LINKS_ENABLED=false
 QALITY_JIRA_LINK_TYPE="QAlity Test"
 QALITY_JIRA_LINK_DIRECTION=test_to_requirement
@@ -93,12 +111,13 @@ or inward description. For a Jira link configuration shown as
 `test_to_requirement` to make the requirement display `is tested by` the
 QAlity Test.
 
-Publish a result file or all versioned files in a directory:
+Publish the default `storage/qality` results, or provide a result file/directory:
 
 ```bash
+php artisan qality:publish
 php artisan qality:publish storage/qality
 php artisan qality:publish storage/qality/run.jsonl --cycle-id 12345
-php artisan qality:publish storage/qality --dry-run
+php artisan qality:publish --dry-run
 ```
 
 The publisher creates a new cycle when no cycle ID is supplied. It resolves
@@ -113,10 +132,13 @@ mapping, then link the new test-case issues to the Jira work item in the
 current branch:
 
 ```bash
-php artisan qality:create-test-cases storage/qality
+php artisan qality:create-test-cases --branch feature/PROJ-123-checkout
 php artisan qality:create-test-cases storage/qality/run.jsonl --branch feature/PROJ-123-checkout
-php artisan qality:create-test-cases storage/qality --dry-run
+php artisan qality:create-test-cases --dry-run
 ```
+
+The result path is optional for both commands and defaults to the configured
+`QALITY_RESULTS_DIRECTORY` value, which defaults to `storage/qality`.
 
 Branches must match `feature/KEY-123-description`, `hotfix/KEY-123-description`,
 or `bugfix/KEY-123-description` by default. Use `--branch` for detached-head
@@ -158,7 +180,7 @@ A feature-branch step can pass its CI provider’s branch variable directly:
 ```bash
 composer install --prefer-dist --no-interaction
 php artisan test
-php artisan qality:create-test-cases storage/qality --branch "$CI_BRANCH_NAME"
+php artisan qality:create-test-cases --branch "$CI_BRANCH_NAME"
 ```
 
 Replace `CI_BRANCH_NAME` with the branch variable provided by the selected
@@ -173,7 +195,7 @@ new cycle is required:
 ```bash
 composer install --prefer-dist --no-interaction
 php artisan test
-php artisan qality:publish storage/qality
+php artisan qality:publish
 ```
 
 Use the same deployment-stage commands for QA, UAT, and production. Passing
