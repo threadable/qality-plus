@@ -1,7 +1,7 @@
 # QAlity Plus for Laravel and PHPUnit
 
 This package records PHPUnit outcomes as versioned JSONL and publishes those
-records to QAlity Plus from CI. It uses native QAlity and Jira APIs
+records to QAlity Plus from CI. It uses native QAlity and Jira APIs.
 
 ## Installation
 
@@ -47,8 +47,10 @@ final class CheckoutTest extends TestCase
 }
 ```
 
-The attribute may also be placed on an individual test method. Tests without
-the attribute are recorded but skipped by the publisher.
+The attribute may also be placed on an individual test method; method-level
+metadata takes precedence over class-level metadata. Tests are always recorded.
+`qality:publish` skips records without an `issue_key`, while
+`qality:create-test-cases` can create missing cases from unmapped records.
 
 Pest tests can use an explicit JSON mapping file because Pest generates the
 underlying PHPUnit test method. Register it as an extension parameter:
@@ -94,10 +96,19 @@ when an existing cycle is supplied with `--cycle-id` or
 they read and create Jira issue links. The `--dry-run` variants only validate
 local JSONL data and do not require API credentials.
 
+`QALITY_JIRA_BEARER_TOKEN` is sent as an HTTP Bearer token and is an alternative
+to Jira email/API-token authentication. For Jira Cloud OAuth 2.0, set the base
+URL to the Atlassian API gateway URL for the site, such as
+`https://api.atlassian.com/ex/jira/<cloud-id>`. The package accepts an already
+issued token; it does not obtain or refresh OAuth tokens.
+
 Optional settings and their defaults are:
 
 ```dotenv
 QALITY_PLUS_BASE_URL=https://apps-qalityplus.soldevelo.com/api
+QALITY_PLUS_CYCLE_ID=               # optional existing cycle
+QALITY_PLUS_CYCLE_NAME=             # optional new-cycle name
+QALITY_PLUS_CYCLE_COMMENT=          # optional new-cycle comment
 QALITY_RESULTS_DIRECTORY=storage/qality
 QALITY_TEST_MAPPING_FILE=.qality-test-map.json
 QALITY_JIRA_LINKS_ENABLED=false
@@ -120,10 +131,12 @@ php artisan qality:publish storage/qality/run.jsonl --cycle-id 12345
 php artisan qality:publish --dry-run
 ```
 
-The publisher creates a new cycle when no cycle ID is supplied. It resolves
-mapped Jira issues, adds them to the cycle, and creates native QAlity
-executions. Transient HTTP failures are retried with bounded exponential
-backoff; unresolved failures return a non-zero command status.
+The publisher creates a new cycle when neither `--cycle-id` nor
+`QALITY_PLUS_CYCLE_ID` is supplied. It resolves mapped Jira issues, assigns
+their test cases to the cycle, and updates the
+executions QAlity creates for those assignments. Transient HTTP failures are
+retried with bounded exponential backoff; unresolved failures return a
+non-zero command status.
 
 ## Create missing test cases from a branch
 
@@ -145,13 +158,15 @@ or `bugfix/KEY-123-description` by default. Use `--branch` for detached-head
 CI jobs. The work-item pattern can be changed with `QALITY_BRANCH_PATTERN`;
 custom patterns must provide a named `key` capture group.
 
-The command uses the configured `QALITY_PLUS_PROJECT_ID` and Jira link settings.
-The default Jira link type is `QAlity Test`; override it with
-`QALITY_JIRA_LINK_TYPE` when the Jira instance uses a different link type. It
-records created case keys in `.qality-test-map.json` so rerunning the command
-does not create duplicates. Override that location with
-`QALITY_TEST_MAPPING_FILE` or `--mapping-file`. The command fails before making
-API calls when the branch cannot provide a work-item key.
+The command uses the configured `QALITY_PLUS_PROJECT_ID`, Jira issue-link type,
+and link direction. The default Jira link type is `QAlity Test`; override it
+with `QALITY_JIRA_LINK_TYPE` when the Jira instance uses a different link type.
+Newly created cases are always linked to the branch work item;
+`QALITY_JIRA_LINKS_ENABLED` only controls optional requirement links while
+publishing existing cases. The command records created case keys in
+`.qality-test-map.json` so rerunning it does not create duplicates. Override
+that location with `QALITY_TEST_MAPPING_FILE` or `--mapping-file`. The command
+fails before making API calls when the branch cannot provide a work-item key.
 
 ## Recommended CI/CD workflow
 
