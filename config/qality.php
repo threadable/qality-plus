@@ -30,6 +30,8 @@ return [
         'email' => env('QALITY_JIRA_EMAIL'),
         'api_token' => env('QALITY_JIRA_API_TOKEN'),
         'bearer_token' => env('QALITY_JIRA_BEARER_TOKEN'),
+        'project_key' => env('QALITY_JIRA_PROJECT_KEY'),
+        'test_issue_type' => env('QALITY_JIRA_TEST_ISSUE_TYPE', 'QAlity Test'),
     ],
 
     'publisher' => [

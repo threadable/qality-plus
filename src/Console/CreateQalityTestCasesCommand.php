@@ -9,6 +9,7 @@ use Threadable\QalityPlus\Publisher\BranchWorkItemResolver;
 use Threadable\QalityPlus\Publisher\CreateTestCasesService;
 use Threadable\QalityPlus\Publisher\GitBranchResolver;
 use Threadable\QalityPlus\Publisher\JiraClient;
+use Threadable\QalityPlus\Publisher\JiraTestCaseResolver;
 use Threadable\QalityPlus\Publisher\JsonlResultReader;
 use Threadable\QalityPlus\Publisher\PublisherException;
 use Threadable\QalityPlus\Publisher\QalityClient;
@@ -39,7 +40,13 @@ final class CreateQalityTestCasesCommand extends Command
                 'project_id' => config('qality.qality.project_id'),
                 'link_type' => is_array($linking) ? $linking['type'] ?? null : null,
                 'link_direction' => is_array($linking) ? $linking['direction'] ?? 'test_to_requirement' : 'test_to_requirement',
-            ]);
+            ],
+                new JiraTestCaseResolver(
+                    $jira,
+                    is_string(config('qality.jira.project_key')) ? config('qality.jira.project_key') : null,
+                    (string) config('qality.jira.test_issue_type', 'QAlity Test'),
+                ),
+            );
             $summary = $service->create(
                 $records,
                 $workItemKey,

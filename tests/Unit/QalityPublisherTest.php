@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Threadable\QalityPlus\Tests\Unit;
 
 use Threadable\QalityPlus\Publisher\JiraClient;
+use Threadable\QalityPlus\Publisher\JiraTestCaseLookup;
+use Threadable\QalityPlus\Publisher\JiraTestCaseResolver;
 use Threadable\QalityPlus\Publisher\PublisherException;
 use Threadable\QalityPlus\Publisher\QalityClient;
 use Threadable\QalityPlus\Publisher\QalityPublisher;
@@ -48,6 +50,46 @@ final class QalityPublisherTest extends TestCase
 
         self::assertSame(1, $summary->skipped);
         self::assertSame(0, $qality->cycleCreates);
+    }
+
+    public function test_it_resolves_missing_issue_keys_by_test_name(): void
+    {
+        $qality = new FakeQalityClient;
+        $jira = new FakeJiraClient;
+        $jira->testCaseKeysByName['test_checkout'] = ['QA-456'];
+        $publisher = new QalityPublisher($qality, $jira, [
+            'project_id' => '20001',
+            'test_case_resolver' => new JiraTestCaseResolver($jira, 'QA', 'QAlity Test'),
+            'linking' => ['enabled' => false],
+        ]);
+
+        $summary = $publisher->publish([[
+            'status' => 'passed',
+            'test' => ['id' => 'CheckoutTest::test_checkout', 'name' => 'test_checkout'],
+            'qality' => null,
+        ]]);
+
+        self::assertSame(1, $summary->published);
+        self::assertSame(['10001'], $qality->addedCaseIds);
+    }
+
+    public function test_it_rejects_ambiguous_name_matches(): void
+    {
+        $qality = new FakeQalityClient;
+        $jira = new FakeJiraClient;
+        $jira->testCaseKeysByName['test_checkout'] = ['QA-456', 'QA-789'];
+        $publisher = new QalityPublisher($qality, $jira, [
+            'project_id' => '20001',
+            'test_case_resolver' => new JiraTestCaseResolver($jira, 'QA', 'QAlity Test'),
+        ]);
+
+        $this->expectExceptionMessage('Multiple Jira test cases match [test_checkout]');
+
+        $publisher->publish([[
+            'status' => 'passed',
+            'test' => ['id' => 'CheckoutTest::test_checkout', 'name' => 'test_checkout'],
+            'qality' => null,
+        ]]);
     }
 
     public function test_it_maps_all_supported_phpunit_outcomes_to_qality_statuses(): void
@@ -195,9 +237,12 @@ final class FakeQalityClient implements QalityClient
     }
 }
 
-final class FakeJiraClient implements JiraClient
+final class FakeJiraClient implements JiraClient, JiraTestCaseLookup
 {
     public bool $linkExists = false;
+
+    /** @var array<string, list<string>> */
+    public array $testCaseKeysByName = [];
 
     /** @var array<string, string> */
     private array $issueIds = [];
@@ -210,6 +255,11 @@ final class FakeJiraClient implements JiraClient
         $this->issueIds[$issueKey] ??= (string) (10001 + count($this->issueIds));
 
         return ['id' => $this->issueIds[$issueKey], 'key' => $issueKey];
+    }
+
+    public function findTestCaseKeysByName(string $name, string $projectKey, string $issueType): array
+    {
+        return $this->testCaseKeysByName[$name] ?? [];
     }
 
     public function issueLinkExists(string $testIssueKey, string $requirementIssueKey, string $linkType): bool

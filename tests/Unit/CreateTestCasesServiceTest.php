@@ -6,6 +6,8 @@ namespace Threadable\QalityPlus\Tests\Unit;
 
 use Threadable\QalityPlus\Publisher\CreateTestCasesService;
 use Threadable\QalityPlus\Publisher\JiraClient;
+use Threadable\QalityPlus\Publisher\JiraTestCaseLookup;
+use Threadable\QalityPlus\Publisher\JiraTestCaseResolver;
 use Threadable\QalityPlus\Publisher\QalityClient;
 use Threadable\QalityPlus\Tests\TestCase;
 
@@ -82,6 +84,54 @@ final class CreateTestCasesServiceTest extends TestCase
         self::assertSame([], $jira->createdLinks);
     }
 
+    public function test_it_uses_an_attribute_name_when_creating_a_missing_case(): void
+    {
+        $path = $this->temporaryMappingPath();
+        $qality = new CreateFakeQalityClient;
+        $jira = new CreateFakeJiraClient;
+        $service = new CreateTestCasesService($qality, $jira, [
+            'project_id' => '20001',
+            'link_type' => 'Tests',
+        ]);
+
+        $service->create([[
+            'test' => ['id' => 'CheckoutTest::test_checkout', 'name' => 'test_checkout'],
+            'qality' => ['name' => 'Customer can complete checkout'],
+        ]], 'PROJ-123', $path);
+
+        self::assertSame([
+            'projectId' => '20001',
+            'testCases' => [['name' => 'Customer can complete checkout', 'testSteps' => []]],
+        ], $qality->importPayload);
+    }
+
+    public function test_it_resolves_an_existing_case_by_name_and_persists_the_mapping(): void
+    {
+        $path = $this->temporaryMappingPath();
+        $qality = new CreateFakeQalityClient;
+        $jira = new CreateFakeJiraClient;
+        $jira->testCaseKeysByName['Customer can complete checkout'] = ['QA-456'];
+        $service = new CreateTestCasesService(
+            $qality,
+            $jira,
+            [
+                'project_id' => '20001',
+                'link_type' => 'Tests',
+            ],
+            new JiraTestCaseResolver($jira, 'QA', 'QAlity Test'),
+        );
+
+        $summary = $service->create([[
+            'test' => ['id' => 'CheckoutTest::test_checkout', 'name' => 'test_checkout'],
+            'qality' => ['name' => 'Customer can complete checkout'],
+        ]], 'PROJ-123', $path);
+
+        self::assertSame(0, $summary->eligible);
+        self::assertSame(1, $summary->skipped);
+        self::assertSame([], $qality->importPayload);
+        self::assertSame('QA-456', json_decode((string) file_get_contents($path), true)['CheckoutTest::test_checkout']['issue_key']);
+    }
+
     public function test_dry_run_does_not_require_api_configuration_or_call_upstreams(): void
     {
         $path = $this->temporaryMappingPath();
@@ -156,14 +206,22 @@ final class CreateFakeQalityClient implements QalityClient
     }
 }
 
-final class CreateFakeJiraClient implements JiraClient
+final class CreateFakeJiraClient implements JiraClient, JiraTestCaseLookup
 {
     /** @var list<list<string>> */
     public array $createdLinks = [];
 
+    /** @var array<string, list<string>> */
+    public array $testCaseKeysByName = [];
+
     public function issue(string $issueKey): array
     {
         return ['id' => '10001', 'key' => $issueKey];
+    }
+
+    public function findTestCaseKeysByName(string $name, string $projectKey, string $issueType): array
+    {
+        return $this->testCaseKeysByName[$name] ?? [];
     }
 
     public function issueLinkExists(string $testIssueKey, string $requirementIssueKey, string $linkType): bool

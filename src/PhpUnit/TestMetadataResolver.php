@@ -37,11 +37,30 @@ final class TestMetadataResolver
         $attribute = $method->getAttributes(QalityTestCase::class)[0] ?? null;
 
         if ($attribute !== null) {
-            return $attribute->newInstance()->toArray();
+            $metadata = $attribute->newInstance()->toArray();
+            $mapping = $this->mappingFor($test->id());
+
+            if ($mapping !== null) {
+                foreach ($metadata as $key => $value) {
+                    if ($value !== null && (! is_string($value) || trim($value) !== '')) {
+                        $mapping[$key] = $value;
+                    }
+                }
+
+                return $mapping;
+            }
+
+            return $metadata;
         }
 
-        $id = $test->id();
+        return $this->mappingFor($test->id());
+    }
 
+    /**
+     * @return array<string, string|null>|null
+     */
+    private function mappingFor(string $id): ?array
+    {
         return $this->mappings[$id] ?? $this->mappings[explode('#', $id, 2)[0]] ?? null;
     }
 

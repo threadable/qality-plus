@@ -13,6 +13,7 @@ final class CreateTestCasesService
         private readonly QalityClient $qality,
         private readonly JiraClient $jira,
         private readonly array $options,
+        private readonly ?JiraTestCaseResolver $testCaseResolver = null,
     ) {}
 
     /**
@@ -25,6 +26,7 @@ final class CreateTestCasesService
         $eligible = [];
         $seen = [];
         $skipped = 0;
+        $resolvedMappings = false;
 
         foreach ($records as $record) {
             $test = $record['test'] ?? null;
@@ -47,14 +49,31 @@ final class CreateTestCasesService
                 continue;
             }
 
-            $name = is_string($test['name'] ?? null) && trim($test['name']) !== ''
-                ? $test['name']
-                : $testId;
+            if (! $dryRun && $this->testCaseResolver !== null) {
+                $issueKey = $this->testCaseResolver->resolve($record);
+
+                if ($issueKey !== null) {
+                    $mappings[$testId] = ['issue_key' => $issueKey];
+                    $resolvedMappings = true;
+                    $skipped++;
+
+                    continue;
+                }
+            }
+
+            $metadata = $record['qality'] ?? null;
+            $name = is_array($metadata) && is_string($metadata['name'] ?? null) && trim($metadata['name']) !== ''
+                ? $metadata['name']
+                : (is_string($test['name'] ?? null) && trim($test['name']) !== '' ? $test['name'] : $testId);
 
             $eligible[] = [
                 'id' => $testId,
                 'name' => $name,
             ];
+        }
+
+        if ($resolvedMappings) {
+            $mappingStore->save($mappings);
         }
 
         if ($dryRun || $eligible === []) {

@@ -82,6 +82,39 @@ final class HttpClientsTest extends TestCase
         });
     }
 
+    public function test_jira_finds_a_qality_test_case_by_exact_name_within_project_and_issue_type(): void
+    {
+        Http::fake([
+            'https://jira.test/rest/api/3/search/jql' => Http::response([
+                'issues' => [
+                    ['key' => 'QA-123', 'fields' => ['summary' => 'Customer can complete checkout']],
+                    ['key' => 'QA-999', 'fields' => ['summary' => 'Customer can complete checkout later']],
+                ],
+            ]),
+        ]);
+
+        $client = new HttpJiraClient(
+            baseUrl: 'https://jira.test',
+            email: 'ci@example.com',
+            apiToken: 'jira-token',
+            bearerToken: null,
+        );
+
+        self::assertSame(
+            ['QA-123'],
+            $client->findTestCaseKeysByName('Customer can complete checkout', 'QA', 'QAlity Test'),
+        );
+
+        Http::assertSent(static function ($request): bool {
+            return $request->url() === 'https://jira.test/rest/api/3/search/jql'
+                && $request->data() === [
+                    'jql' => 'project = "QA" AND issuetype = "QAlity Test" AND summary ~ "Customer can complete checkout"',
+                    'fields' => ['summary'],
+                    'maxResults' => 50,
+                ];
+        });
+    }
+
     public function test_qality_retries_transient_server_errors(): void
     {
         Http::fakeSequence()

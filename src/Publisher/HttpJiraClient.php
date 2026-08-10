@@ -7,7 +7,7 @@ namespace Threadable\QalityPlus\Publisher;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 
-final class HttpJiraClient extends HttpTransport implements JiraClient
+final class HttpJiraClient extends HttpTransport implements JiraClient, JiraTestCaseLookup
 {
     public function __construct(
         string $baseUrl,
@@ -24,6 +24,44 @@ final class HttpJiraClient extends HttpTransport implements JiraClient
     public function issue(string $issueKey): array
     {
         return $this->sendJira('GET', '/rest/api/3/issue/'.rawurlencode($issueKey).'?fields=issuelinks,project,issuetype');
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function findTestCaseKeysByName(string $name, string $projectKey, string $issueType): array
+    {
+        $payload = $this->sendJira('POST', '/rest/api/3/search/jql', [
+            'jql' => sprintf(
+                'project = %s AND issuetype = %s AND summary ~ %s',
+                $this->jqlString($projectKey),
+                $this->jqlString($issueType),
+                $this->jqlString($name),
+            ),
+            'fields' => ['summary'],
+            'maxResults' => 50,
+        ]);
+        $issues = $payload['issues'] ?? [];
+
+        if (! is_array($issues)) {
+            return [];
+        }
+
+        $keys = [];
+
+        foreach ($issues as $issue) {
+            if (! is_array($issue) || ($issue['fields']['summary'] ?? null) !== $name) {
+                continue;
+            }
+
+            $key = $issue['key'] ?? null;
+
+            if (is_string($key) && trim($key) !== '') {
+                $keys[] = $key;
+            }
+        }
+
+        return array_values(array_unique($keys));
     }
 
     public function issueLinkExists(string $testIssueKey, string $requirementIssueKey, string $linkType): bool
@@ -98,5 +136,10 @@ final class HttpJiraClient extends HttpTransport implements JiraClient
         }
 
         throw new PublisherException('Jira credentials are not configured.');
+    }
+
+    private function jqlString(string $value): string
+    {
+        return '"'.str_replace(['\\', '"'], ['\\\\', '\\"'], $value).'"';
     }
 }

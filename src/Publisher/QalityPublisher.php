@@ -24,9 +24,22 @@ final class QalityPublisher
     {
         $mapped = [];
         $skipped = 0;
+        $testCaseResolver = $this->options['test_case_resolver'] ?? null;
 
         foreach ($records as $record) {
             $metadata = $record['qality'] ?? null;
+
+            if ((! is_array($metadata) || ! is_string($metadata['issue_key'] ?? null) || trim($metadata['issue_key']) === '')
+                && ! $dryRun
+                && $testCaseResolver instanceof JiraTestCaseResolver) {
+                $issueKey = $testCaseResolver->resolve($record);
+
+                if ($issueKey !== null) {
+                    $metadata = is_array($metadata) ? $metadata : [];
+                    $metadata['issue_key'] = $issueKey;
+                    $record['qality'] = $metadata;
+                }
+            }
 
             if (! is_array($metadata) || ! is_string($metadata['issue_key'] ?? null) || trim($metadata['issue_key']) === '') {
                 $skipped++;

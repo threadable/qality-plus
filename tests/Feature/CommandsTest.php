@@ -145,6 +145,48 @@ final class CommandsTest extends TestCase
         Http::assertSentCount(7);
     }
 
+    public function test_publish_command_resolves_a_missing_case_by_name(): void
+    {
+        $this->writeResult('CheckoutTest::test_checkout', 'test_checkout', ['name' => 'test_checkout']);
+        config([
+            'qality.results.directory' => $this->resultPath,
+            'qality.qality.base_url' => 'https://qality.test/api',
+            'qality.qality.token' => 'qality-token',
+            'qality.qality.project_id' => '20001',
+            'qality.jira.base_url' => 'https://jira.test',
+            'qality.jira.email' => 'ci@example.com',
+            'qality.jira.api_token' => 'jira-token',
+            'qality.jira.project_key' => 'QA',
+        ]);
+        Http::fake([
+            'https://jira.test/rest/api/3/search/jql' => Http::response([
+                'issues' => [['key' => 'QA-123', 'fields' => ['summary' => 'test_checkout']]],
+            ]),
+            'https://qality.test/api/statuses' => Http::response([
+                'statuses' => [
+                    ['id' => 1, 'name' => 'Passed', 'category' => 'PASSED'],
+                    ['id' => 2, 'name' => 'Failed', 'category' => 'FAILED'],
+                    ['id' => 3, 'name' => 'Unexecuted', 'category' => 'UNFINISHED'],
+                ],
+            ]),
+            'https://qality.test/api/testCycles' => Http::response(['id' => 'cycle-1'], 201),
+            'https://jira.test/rest/api/3/issue/*' => Http::response([
+                'id' => '10001',
+                'fields' => ['issuelinks' => []],
+            ]),
+            'https://qality.test/api/testCycles/cycle-1/testCycleAssignments' => Http::response([
+                ['testCaseId' => 10001, 'testExecution' => ['id' => 'execution-1']],
+            ]),
+            'https://qality.test/api/testExecutions/execution-1' => Http::response(['id' => 'execution-1']),
+        ]);
+
+        $this->artisan('qality:publish')
+            ->expectsOutputToContain('Published 1 result(s); 1 published, 0 skipped, 0 Jira link(s) in cycle cycle-1.')
+            ->assertExitCode(0);
+
+        Http::assertSentCount(6);
+    }
+
     /**
      * @param  array<string, string>  $metadata
      */

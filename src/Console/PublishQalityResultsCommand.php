@@ -6,6 +6,7 @@ namespace Threadable\QalityPlus\Console;
 
 use Illuminate\Console\Command;
 use Threadable\QalityPlus\Publisher\JiraClient;
+use Threadable\QalityPlus\Publisher\JiraTestCaseResolver;
 use Threadable\QalityPlus\Publisher\JsonlResultReader;
 use Threadable\QalityPlus\Publisher\PublisherException;
 use Threadable\QalityPlus\Publisher\QalityClient;
@@ -31,6 +32,11 @@ final class PublishQalityResultsCommand extends Command
                 'cycle_name' => config('qality.qality.cycle_name'),
                 'cycle_comment' => config('qality.qality.cycle_comment'),
                 'linking' => config('qality.publisher.linking', []),
+                'test_case_resolver' => new JiraTestCaseResolver(
+                    $jira,
+                    is_string(config('qality.jira.project_key')) ? config('qality.jira.project_key') : null,
+                    (string) config('qality.jira.test_issue_type', 'QAlity Test'),
+                ),
             ]);
             $summary = $publisher->publish(
                 $records,

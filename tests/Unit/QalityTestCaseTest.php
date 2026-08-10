@@ -18,6 +18,20 @@ final class QalityTestCaseTest extends TestCase
             'requirement_issue_key' => 'REQ-42',
             'link_type' => 'Tests',
             'link_direction' => 'test_to_requirement',
+            'name' => null,
+        ], $attribute->toArray());
+    }
+
+    public function test_it_supports_a_name_without_an_issue_key(): void
+    {
+        $attribute = new QalityTestCase(name: 'Customer can complete checkout');
+
+        self::assertSame([
+            'issue_key' => null,
+            'requirement_issue_key' => null,
+            'link_type' => null,
+            'link_direction' => null,
+            'name' => 'Customer can complete checkout',
         ], $attribute->toArray());
     }
 }

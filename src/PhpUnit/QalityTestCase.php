@@ -10,13 +10,15 @@ use Attribute;
 final readonly class QalityTestCase
 {
     public function __construct(
-        public string $issueKey,
+        public ?string $issueKey = null,
         public ?string $requirementIssueKey = null,
         public ?string $linkType = null,
         public ?string $linkDirection = null,
+        public ?string $name = null,
     ) {
-        if (trim($issueKey) === '') {
-            throw new \InvalidArgumentException('The QAlity issue key cannot be empty.');
+        if (($issueKey === null || trim($issueKey) === '')
+            && ($name === null || trim($name) === '')) {
+            throw new \InvalidArgumentException('A QAlity issue key or test-case name is required.');
         }
     }
 
@@ -30,6 +32,7 @@ final readonly class QalityTestCase
             'requirement_issue_key' => $this->requirementIssueKey,
             'link_type' => $this->linkType,
             'link_direction' => $this->linkDirection,
+            'name' => $this->name,
         ];
     }
 }
