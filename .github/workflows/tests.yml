@@ -3,6 +3,11 @@ name: Tests
 on:
   push:
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -11,6 +16,7 @@ jobs:
   test:
     name: Laravel ${{ matrix.laravel }} / PHP ${{ matrix.php }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -52,6 +58,7 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           coverage: none
+          cache: composer
           tools: composer:v2
 
       - name: Validate baseline Composer configuration
