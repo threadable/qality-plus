@@ -7,8 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+No unreleased changes.
+
+## [1.0.0] - 2026-08-11
+
 ### Added
 
 - Automatic Jira name-based lookup for QAlity test cases.
 - Creation and publishing commands with `storage/qality` defaults.
 - Laravel and PHPUnit compatibility testing across the supported matrix.
+
+### Fixed
+
+- Support the Private Packagist username required by user and organization tokens.
