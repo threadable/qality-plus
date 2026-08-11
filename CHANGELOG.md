@@ -7,9 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Added
-
-- Laravel Boost guidelines and a `qality-plus-development` skill.
+No unreleased changes.
 
 ## [1.0.0] - 2026-08-11
 
@@ -18,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Automatic Jira name-based lookup for QAlity test cases.
 - Creation and publishing commands with `storage/qality` defaults.
 - Laravel and PHPUnit compatibility testing across the supported matrix.
+- Laravel Boost guidelines and a `qality-plus-development` skill.
 
 ### Fixed
 
