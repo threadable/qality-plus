@@ -64,6 +64,11 @@ jobs:
       - name: Validate baseline Composer configuration
         run: composer validate --strict --no-check-publish
 
+      - name: Configure Private Packagist authentication
+        env:
+          PRIVATE_PACKAGIST_TOKEN: ${{ secrets.PRIVATE_PACKAGIST_TOKEN }}
+        run: composer config --global --auth http-basic.repo.packagist.com token "$PRIVATE_PACKAGIST_TOKEN"
+
       - name: Select matching Testbench version
         run: composer require --dev "orchestra/testbench:${{ matrix.testbench }}" --no-update --no-interaction
 
