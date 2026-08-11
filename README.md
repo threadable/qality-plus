@@ -9,6 +9,10 @@ them to QAlity Plus and Jira from your CI/CD pipeline.
 composer require threadable/qality-plus
 ```
 
+If your organization distributes the package through Private Packagist, see
+[Private Packagist setup](docs/private-packagist.md) before running this
+command.
+
 The package is auto-discovered by Laravel. Publish the configuration only when
 you need to change a default:
 
