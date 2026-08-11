@@ -132,6 +132,17 @@ for CI systems where the branch cannot be detected automatically.
 Store QAlity and Jira credentials as secured CI/CD variables. The package does
 not require a particular CI/CD provider.
 
+## Laravel Boost
+
+This package includes Laravel Boost guidelines and a development skill. In a
+Laravel application, install Boost as a development dependency and run its
+installer to make the package guidance available to your AI coding agent:
+
+```bash
+composer require laravel/boost --dev
+php artisan boost:install
+```
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development and pull-request
