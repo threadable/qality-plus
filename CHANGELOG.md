@@ -7,9 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Added
-
-- Requirement-only `QalityTestCase` attributes with method-name and Pest-description fallback.
+No unreleased changes.
 
 ## [1.0.0] - 2026-08-11
 
