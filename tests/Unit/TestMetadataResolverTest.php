@@ -44,4 +44,14 @@ final class TestMetadataResolverTest extends TestCase
 
         unlink($path);
     }
+
+    #[QalityTestCase(requirementIssueKey: 'NDC-123')]
+    public function test_it_allows_a_requirement_only_attribute(): void
+    {
+        $test = TestMethodBuilder::fromTestCase($this);
+        $metadata = (new TestMetadataResolver)->resolve($test);
+
+        self::assertSame('NDC-123', $metadata['requirement_issue_key'] ?? null);
+        self::assertNull($metadata['name'] ?? null);
+    }
 }

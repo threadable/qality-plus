@@ -61,6 +61,10 @@ public function test_checkout_can_be_completed(): void
 </code-snippet>
 @endverbatim
 
+When only `requirementIssueKey` is supplied, the PHPUnit method name or Pest
+description is used as the QAlity test-case name. The requirement key is used
+for the optional Jira requirement link.
+
 When no name is provided, the PHPUnit method name or Pest test description is
 used. If an issue key is provided, the existing QAlity case is used and its
 name is not changed.

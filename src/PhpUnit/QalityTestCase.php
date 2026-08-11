@@ -17,8 +17,9 @@ final readonly class QalityTestCase
         public ?string $name = null,
     ) {
         if (($issueKey === null || trim($issueKey) === '')
+            && ($requirementIssueKey === null || trim($requirementIssueKey) === '')
             && ($name === null || trim($name) === '')) {
-            throw new \InvalidArgumentException('A QAlity issue key or test-case name is required.');
+            throw new \InvalidArgumentException('A QAlity issue key, requirement issue key, or test-case name is required.');
         }
     }
 

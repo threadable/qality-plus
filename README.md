@@ -82,6 +82,17 @@ public function test_checkout_can_be_completed(): void
 }
 ```
 
+If only a requirement is supplied, the method name or Pest description is
+used as the QAlity test-case name:
+
+```php
+#[QalityTestCase(requirementIssueKey: 'NDC-123')]
+public function test_user_can_reset_their_password(): void
+{
+    // ...
+}
+```
+
 When no name is provided, the package uses the PHPUnit method name or Pest test
 description. If an issue key is already available, the case is treated as
 existing and its name is not changed.
