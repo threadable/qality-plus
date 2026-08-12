@@ -7,10 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Added
-
-- Class-qualified fallback names for PHPUnit test cases.
-- Configurable labels for newly created Jira test cases.
+No unreleased changes.
 
 ## [1.0.0] - 2026-08-11
 
@@ -20,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Creation and publishing commands with `storage/qality` defaults.
 - Laravel and PHPUnit compatibility testing across the supported matrix.
 - Laravel Boost guidelines and a `qality-plus-development` skill.
+- Class-qualified fallback names for PHPUnit test cases.
+- Configurable labels for newly created Jira test cases.
 
 ### Fixed
 
