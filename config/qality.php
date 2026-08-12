@@ -32,6 +32,7 @@ return [
         'bearer_token' => env('QALITY_JIRA_BEARER_TOKEN'),
         'project_key' => env('QALITY_JIRA_PROJECT_KEY'),
         'test_issue_type' => env('QALITY_JIRA_TEST_ISSUE_TYPE', 'QAlity Test'),
+        'created_test_label' => env('QALITY_JIRA_CREATED_TEST_LABEL', 'threadable-qality-plus'),
     ],
 
     'publisher' => [

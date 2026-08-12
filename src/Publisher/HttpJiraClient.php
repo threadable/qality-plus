@@ -7,7 +7,7 @@ namespace Threadable\QalityPlus\Publisher;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 
-final class HttpJiraClient extends HttpTransport implements JiraClient, JiraTestCaseLookup
+final class HttpJiraClient extends HttpTransport implements JiraClient, JiraIssueLabeler, JiraTestCaseLookup
 {
     public function __construct(
         string $baseUrl,
@@ -108,6 +108,15 @@ final class HttpJiraClient extends HttpTransport implements JiraClient, JiraTest
             'type' => ['name' => $linkType],
             'inwardIssue' => ['key' => $inward],
             'outwardIssue' => ['key' => $outward],
+        ]);
+    }
+
+    public function addIssueLabel(string $issueKey, string $label): void
+    {
+        $this->sendJira('PUT', '/rest/api/3/issue/'.rawurlencode($issueKey), [
+            'update' => [
+                'labels' => [['add' => $label]],
+            ],
         ]);
     }
 

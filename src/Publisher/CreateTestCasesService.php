@@ -6,6 +6,8 @@ namespace Threadable\QalityPlus\Publisher;
 
 final class CreateTestCasesService
 {
+    private readonly TestCaseNameResolver $nameResolver;
+
     /**
      * @param  array<string, mixed>  $options
      */
@@ -14,7 +16,9 @@ final class CreateTestCasesService
         private readonly JiraClient $jira,
         private readonly array $options,
         private readonly ?JiraTestCaseResolver $testCaseResolver = null,
-    ) {}
+    ) {
+        $this->nameResolver = new TestCaseNameResolver;
+    }
 
     /**
      * @param  list<array<string, mixed>>  $records
@@ -61,10 +65,11 @@ final class CreateTestCasesService
                 }
             }
 
-            $metadata = $record['qality'] ?? null;
-            $name = is_array($metadata) && is_string($metadata['name'] ?? null) && trim($metadata['name']) !== ''
-                ? $metadata['name']
-                : (is_string($test['name'] ?? null) && trim($test['name']) !== '' ? $test['name'] : $testId);
+            $name = $this->nameResolver->resolve($record);
+
+            if ($name === null) {
+                throw new PublisherException(sprintf('Unable to determine a QAlity test-case name for [%s].', $testId));
+            }
 
             $eligible[] = [
                 'id' => $testId,
@@ -137,6 +142,7 @@ final class CreateTestCasesService
         }
 
         $linked = $this->linkCases($createdCases, $workItemKey, $linkType, $direction);
+        $this->labelCases($createdCases);
         $errors = $imported['errors'] ?? [];
 
         if (is_array($errors) && $errors !== []) {
@@ -186,6 +192,27 @@ final class CreateTestCasesService
         }
 
         return $linked;
+    }
+
+    /**
+     * @param  list<string>  $caseKeys
+     */
+    private function labelCases(array $caseKeys): void
+    {
+        $label = $this->options['created_test_label'] ?? null;
+        $label = is_string($label) ? trim($label) : '';
+
+        if ($label === '' || $caseKeys === []) {
+            return;
+        }
+
+        if (! $this->jira instanceof JiraIssueLabeler) {
+            throw new PublisherException('A created-test label is configured but the Jira client does not support issue labels.');
+        }
+
+        foreach ($caseKeys as $caseKey) {
+            $this->jira->addIssueLabel($caseKey, $label);
+        }
     }
 
     /**

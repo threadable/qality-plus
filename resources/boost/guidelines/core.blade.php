@@ -61,13 +61,13 @@ public function test_checkout_can_be_completed(): void
 </code-snippet>
 @endverbatim
 
-When only `requirementIssueKey` is supplied, the PHPUnit method name or Pest
-description is used as the QAlity test-case name. The requirement key is used
-for the optional Jira requirement link.
+When only `requirementIssueKey` is supplied, the fully qualified PHPUnit class
+and method name or Pest description is used as the QAlity test-case name. The
+requirement key is used for the optional Jira requirement link.
 
-When no name is provided, the PHPUnit method name or Pest test description is
-used. If an issue key is provided, the existing QAlity case is used and its
-name is not changed.
+When no name is provided, the fully qualified PHPUnit class and method name or
+the Pest test description is used. If an issue key is provided, the existing
+QAlity case is used and its name is not changed.
 
 ### Required CI/CD configuration
 
@@ -117,3 +117,7 @@ without making QAlity Plus or Jira requests.
 
 Keep credentials in secured CI/CD variables. Never place tokens in test files,
 fixtures, mappings, logs, or committed configuration.
+
+Newly created QAlity test cases receive the Jira label
+`threadable-qality-plus` by default. Set `QALITY_JIRA_CREATED_TEST_LABEL=` to
+disable the label.

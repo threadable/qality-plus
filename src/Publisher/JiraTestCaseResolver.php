@@ -25,22 +25,28 @@ final class JiraTestCaseResolver
             return null;
         }
 
-        $name = $this->nameResolver->resolve($record);
+        $names = $this->nameResolver->candidates($record);
 
-        if ($name === null) {
+        if ($names === []) {
             return null;
         }
 
-        $keys = $this->jira->findTestCaseKeysByName($name, $this->projectKey, $this->issueType);
+        foreach ($names as $name) {
+            $keys = $this->jira->findTestCaseKeysByName($name, $this->projectKey, $this->issueType);
 
-        if (count($keys) > 1) {
-            throw new PublisherException(sprintf(
-                'Multiple Jira test cases match [%s]: %s. Provide an issue key or make the test-case name unique.',
-                $name,
-                implode(', ', $keys),
-            ));
+            if (count($keys) > 1) {
+                throw new PublisherException(sprintf(
+                    'Multiple Jira test cases match [%s]: %s. Provide an issue key or make the test-case name unique.',
+                    $name,
+                    implode(', ', $keys),
+                ));
+            }
+
+            if ($keys !== []) {
+                return $keys[0];
+            }
         }
 
-        return $keys[0] ?? null;
+        return null;
     }
 }

@@ -81,6 +81,7 @@ final class CommandsTest extends TestCase
             'https://jira.test/rest/api/3/issue/*' => Http::response([
                 'fields' => ['issuelinks' => []],
             ]),
+            'https://jira.test/rest/api/3/issue/QA-123' => Http::response([], 204),
             'https://jira.test/rest/api/3/issueLink' => Http::response([], 201),
         ]);
 
@@ -91,7 +92,12 @@ final class CommandsTest extends TestCase
             ->expectsOutputToContain('Processed 1 eligible test case(s) for PROJ-123; 1 created, 1 linked, 0 skipped.')
             ->assertExitCode(0);
 
-        Http::assertSentCount(3);
+        Http::assertSentCount(4);
+        Http::assertSent(static fn ($request): bool => $request->method() === 'PUT'
+            && $request->url() === 'https://jira.test/rest/api/3/issue/QA-123'
+            && $request->data() === [
+                'update' => ['labels' => [['add' => 'threadable-qality-plus']]],
+            ]);
         self::assertSame('QA-123', json_decode((string) file_get_contents($this->mappingPath), true)['CheckoutTest::test_checkout']['issue_key']);
     }
 

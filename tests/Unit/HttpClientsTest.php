@@ -82,6 +82,31 @@ final class HttpClientsTest extends TestCase
         });
     }
 
+    public function test_jira_adds_a_label_to_an_issue_without_replacing_existing_labels(): void
+    {
+        Http::fake([
+            'https://jira.test/rest/api/3/issue/QA-123' => Http::response([], 204),
+        ]);
+
+        $client = new HttpJiraClient(
+            baseUrl: 'https://jira.test',
+            email: 'ci@example.com',
+            apiToken: 'jira-token',
+            bearerToken: null,
+        );
+        $client->addIssueLabel('QA-123', 'threadable-qality-plus');
+
+        Http::assertSent(static function ($request): bool {
+            return $request->method() === 'PUT'
+                && $request->url() === 'https://jira.test/rest/api/3/issue/QA-123'
+                && $request->data() === [
+                    'update' => [
+                        'labels' => [['add' => 'threadable-qality-plus']],
+                    ],
+                ];
+        });
+    }
+
     public function test_jira_finds_a_qality_test_case_by_exact_name_within_project_and_issue_type(): void
     {
         Http::fake([

@@ -73,6 +73,32 @@ final class QalityPublisherTest extends TestCase
         self::assertSame(['10001'], $qality->addedCaseIds);
     }
 
+    public function test_it_resolves_legacy_method_name_cases_after_class_qualified_lookup_misses(): void
+    {
+        $qality = new FakeQalityClient;
+        $jira = new FakeJiraClient;
+        $jira->testCaseKeysByName['test_checkout'] = ['QA-456'];
+        $publisher = new QalityPublisher($qality, $jira, [
+            'project_id' => '20001',
+            'test_case_resolver' => new JiraTestCaseResolver($jira, 'QA', 'QAlity Test'),
+            'linking' => ['enabled' => false],
+        ]);
+
+        $summary = $publisher->publish([[
+            'status' => 'passed',
+            'test' => [
+                'id' => 'Tests\\Feature\\CheckoutTest::test_checkout',
+                'name' => 'test_checkout',
+                'class' => 'Tests\\Feature\\CheckoutTest',
+                'method' => 'test_checkout',
+            ],
+            'qality' => null,
+        ]]);
+
+        self::assertSame(1, $summary->published);
+        self::assertSame(['10001'], $qality->addedCaseIds);
+    }
+
     public function test_it_uses_the_test_name_when_only_a_requirement_is_mapped(): void
     {
         $qality = new FakeQalityClient;

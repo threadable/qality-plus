@@ -82,8 +82,8 @@ public function test_checkout_can_be_completed(): void
 }
 ```
 
-If only a requirement is supplied, the method name or Pest description is
-used as the QAlity test-case name:
+If only a requirement is supplied, the fully qualified PHPUnit class and
+method name or Pest description is used as the QAlity test-case name:
 
 ```php
 #[QalityTestCase(requirementIssueKey: 'NDC-123')]
@@ -93,9 +93,9 @@ public function test_user_can_reset_their_password(): void
 }
 ```
 
-When no name is provided, the package uses the PHPUnit method name or Pest test
-description. If an issue key is already available, the case is treated as
-existing and its name is not changed.
+When no name is provided, the package uses the fully qualified PHPUnit class
+and method name, or the Pest test description. If an issue key is already
+available, the case is treated as existing and its name is not changed.
 
 ## CI/CD commands
 
@@ -151,6 +151,10 @@ precedence over `--branch`.
 
 Store QAlity and Jira credentials as secured CI/CD variables. The package does
 not require a particular CI/CD provider.
+
+Newly created QAlity test cases receive the Jira label
+`threadable-qality-plus` by default. Set `QALITY_JIRA_CREATED_TEST_LABEL=` to
+disable the label.
 
 ## Laravel Boost
 

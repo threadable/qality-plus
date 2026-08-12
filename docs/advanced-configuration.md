@@ -72,7 +72,7 @@ The project key is a Jira project key and is separate from
 The lookup uses the test-case name in this order:
 
 1. `QalityTestCase(name: '...')`
-2. PHPUnit method name
+2. Fully qualified PHPUnit class and method name
 3. Pest test description
 
 If an issue key is supplied by an attribute or mapping file, no name lookup is
@@ -112,6 +112,7 @@ QALITY_BRANCH_PATTERN=/^(?:feature|hotfix|bugfix)\/(?<key>[A-Z][A-Z0-9]*-\d+)(?:
 QALITY_JIRA_LINKS_ENABLED=false
 QALITY_JIRA_LINK_TYPE="QAlity Test"
 QALITY_JIRA_LINK_DIRECTION=test_to_requirement
+QALITY_JIRA_CREATED_TEST_LABEL=threadable-qality-plus
 QALITY_HTTP_TIMEOUT=30
 QALITY_HTTP_RETRIES=2
 QALITY_HTTP_RETRY_BACKOFF_MS=250
@@ -124,6 +125,12 @@ inward description. For a Jira link type shown as
 
 `QALITY_JIRA_LINKS_ENABLED` controls optional requirement links during
 publishing. Newly created test cases are always linked to the branch work item.
+Newly created test cases also receive `QALITY_JIRA_CREATED_TEST_LABEL`; set it
+to an empty value to disable the label.
+
+The test-case import does not set the Jira workflow status. The status assigned
+by the Jira project workflow remains in effect; execution outcomes are
+published later through QAlity test executions.
 
 ## Existing-cycle publishing
 

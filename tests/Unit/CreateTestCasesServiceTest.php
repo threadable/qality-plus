@@ -6,6 +6,7 @@ namespace Threadable\QalityPlus\Tests\Unit;
 
 use Threadable\QalityPlus\Publisher\CreateTestCasesService;
 use Threadable\QalityPlus\Publisher\JiraClient;
+use Threadable\QalityPlus\Publisher\JiraIssueLabeler;
 use Threadable\QalityPlus\Publisher\JiraTestCaseLookup;
 use Threadable\QalityPlus\Publisher\JiraTestCaseResolver;
 use Threadable\QalityPlus\Publisher\QalityClient;
@@ -103,6 +104,73 @@ final class CreateTestCasesServiceTest extends TestCase
             'projectId' => '20001',
             'testCases' => [['name' => 'Customer can complete checkout', 'testSteps' => []]],
         ], $qality->importPayload);
+    }
+
+    public function test_it_uses_a_class_qualified_name_when_creating_a_missing_phpunit_case(): void
+    {
+        $path = $this->temporaryMappingPath();
+        $qality = new CreateFakeQalityClient;
+        $jira = new CreateFakeJiraClient;
+        $service = new CreateTestCasesService($qality, $jira, [
+            'project_id' => '20001',
+            'link_type' => 'Tests',
+        ]);
+
+        $service->create([[
+            'test' => [
+                'id' => 'Tests\\Feature\\CheckoutTest::test_checkout',
+                'name' => 'test_checkout',
+                'class' => 'Tests\\Feature\\CheckoutTest',
+                'method' => 'test_checkout',
+            ],
+            'qality' => null,
+        ]], 'PROJ-123', $path);
+
+        self::assertSame([
+            'projectId' => '20001',
+            'testCases' => [[
+                'name' => 'Tests\\Feature\\CheckoutTest::test_checkout',
+                'testSteps' => [],
+            ]],
+        ], $qality->importPayload);
+    }
+
+    public function test_it_labels_created_cases_when_a_label_is_configured(): void
+    {
+        $path = $this->temporaryMappingPath();
+        $qality = new CreateFakeQalityClient;
+        $jira = new CreateFakeJiraClient;
+        $service = new CreateTestCasesService($qality, $jira, [
+            'project_id' => '20001',
+            'link_type' => 'Tests',
+            'created_test_label' => 'threadable-qality-plus',
+        ]);
+
+        $service->create([[
+            'test' => ['id' => 'CheckoutTest::test_checkout', 'name' => 'test_checkout'],
+            'qality' => null,
+        ]], 'PROJ-123', $path);
+
+        self::assertSame([['QA-123', 'threadable-qality-plus']], $jira->addedLabels);
+    }
+
+    public function test_it_does_not_label_created_cases_when_the_label_is_empty(): void
+    {
+        $path = $this->temporaryMappingPath();
+        $qality = new CreateFakeQalityClient;
+        $jira = new CreateFakeJiraClient;
+        $service = new CreateTestCasesService($qality, $jira, [
+            'project_id' => '20001',
+            'link_type' => 'Tests',
+            'created_test_label' => '',
+        ]);
+
+        $service->create([[
+            'test' => ['id' => 'CheckoutTest::test_checkout', 'name' => 'test_checkout'],
+            'qality' => null,
+        ]], 'PROJ-123', $path);
+
+        self::assertSame([], $jira->addedLabels);
     }
 
     public function test_it_resolves_an_existing_case_by_name_and_persists_the_mapping(): void
@@ -206,13 +274,16 @@ final class CreateFakeQalityClient implements QalityClient
     }
 }
 
-final class CreateFakeJiraClient implements JiraClient, JiraTestCaseLookup
+final class CreateFakeJiraClient implements JiraClient, JiraIssueLabeler, JiraTestCaseLookup
 {
     /** @var list<list<string>> */
     public array $createdLinks = [];
 
     /** @var array<string, list<string>> */
     public array $testCaseKeysByName = [];
+
+    /** @var list<list<string>> */
+    public array $addedLabels = [];
 
     public function issue(string $issueKey): array
     {
@@ -236,5 +307,10 @@ final class CreateFakeJiraClient implements JiraClient, JiraTestCaseLookup
         string $direction = 'test_to_requirement',
     ): void {
         $this->createdLinks[] = [$testIssueKey, $requirementIssueKey, $linkType, $direction];
+    }
+
+    public function addIssueLabel(string $issueKey, string $label): void
+    {
+        $this->addedLabels[] = [$issueKey, $label];
     }
 }

@@ -40,6 +40,7 @@ final class CreateQalityTestCasesCommand extends Command
                 'project_id' => config('qality.qality.project_id'),
                 'link_type' => is_array($linking) ? $linking['type'] ?? null : null,
                 'link_direction' => is_array($linking) ? $linking['direction'] ?? 'test_to_requirement' : 'test_to_requirement',
+                'created_test_label' => config('qality.jira.created_test_label'),
             ],
                 new JiraTestCaseResolver(
                     $jira,

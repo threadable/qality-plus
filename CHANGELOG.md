@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-No unreleased changes.
+### Added
+
+- Class-qualified fallback names for PHPUnit test cases.
+- Configurable labels for newly created Jira test cases.
 
 ## [1.0.0] - 2026-08-11
 
