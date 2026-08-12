@@ -47,22 +47,28 @@ final class CreateTestCasesServiceTest extends TestCase
             ],
             [
                 'test' => ['id' => 'ExistingTest::test_existing', 'name' => 'test_existing'],
-                'qality' => ['issue_key' => 'QA-999'],
+                'qality' => [
+                    'issue_key' => 'QA-999',
+                    'requirement_issue_key' => 'PROJ-456',
+                ],
             ],
         ], 'PROJ-123', $path);
 
         self::assertSame(1, $summary->eligible);
         self::assertSame(1, $summary->created);
-        self::assertSame(1, $summary->linked);
+        self::assertSame(2, $summary->linked);
         self::assertSame([
             'projectId' => '20001',
             'testCases' => [['name' => 'test_checkout', 'testSteps' => []]],
         ], $qality->importPayload);
-        self::assertSame([['QA-123', 'PROJ-123', 'Tests', 'test_to_requirement']], $jira->createdLinks);
+        self::assertSame([
+            ['QA-999', 'PROJ-456', 'Tests', 'test_to_requirement'],
+            ['QA-123', 'PROJ-123', 'Tests', 'test_to_requirement'],
+        ], $jira->createdLinks);
         self::assertSame(['issue_key' => 'QA-123'], json_decode((string) file_get_contents($path), true)['CheckoutTest::test_checkout']);
     }
 
-    public function test_it_skips_cases_already_persisted_in_the_mapping_file(): void
+    public function test_it_relinks_cases_already_persisted_in_the_mapping_file(): void
     {
         $path = $this->temporaryMappingPath();
         file_put_contents($path, json_encode([
@@ -83,7 +89,7 @@ final class CreateTestCasesServiceTest extends TestCase
         self::assertSame(0, $summary->eligible);
         self::assertSame(1, $summary->skipped);
         self::assertSame([], $qality->importPayload);
-        self::assertSame([], $jira->createdLinks);
+        self::assertSame([['QA-123', 'PROJ-123', 'Tests', 'test_to_requirement']], $jira->createdLinks);
     }
 
     public function test_it_uses_an_attribute_name_when_creating_a_missing_case(): void
@@ -105,6 +111,24 @@ final class CreateTestCasesServiceTest extends TestCase
             'projectId' => '20001',
             'testCases' => [['name' => 'Customer can complete checkout', 'testSteps' => []]],
         ], $qality->importPayload);
+    }
+
+    public function test_an_annotated_requirement_overrides_the_branch_work_item(): void
+    {
+        $path = $this->temporaryMappingPath();
+        $qality = new CreateFakeQalityClient;
+        $jira = new CreateFakeJiraClient;
+        $service = new CreateTestCasesService($qality, $jira, [
+            'project_id' => '20001',
+            'link_type' => 'Tests',
+        ]);
+
+        $service->create([[
+            'test' => ['id' => 'CheckoutTest::test_checkout', 'name' => 'test_checkout'],
+            'qality' => ['requirement_issue_key' => 'NDCPR-33'],
+        ]], 'NDCPR-562', $path);
+
+        self::assertSame([['QA-123', 'NDCPR-33', 'Tests', 'test_to_requirement']], $jira->createdLinks);
     }
 
     public function test_it_uses_a_class_qualified_name_when_creating_a_missing_phpunit_case(): void
@@ -197,8 +221,10 @@ final class CreateTestCasesServiceTest extends TestCase
 
         self::assertSame(0, $summary->eligible);
         self::assertSame(1, $summary->skipped);
+        self::assertSame(1, $summary->linked);
         self::assertSame([], $qality->importPayload);
         self::assertSame('QA-456', json_decode((string) file_get_contents($path), true)['CheckoutTest::test_checkout']['issue_key']);
+        self::assertSame([['QA-456', 'PROJ-123', 'Tests', 'test_to_requirement']], $jira->createdLinks);
     }
 
     public function test_it_resolves_multiple_existing_cases_with_one_bulk_lookup(): void
@@ -233,8 +259,13 @@ final class CreateTestCasesServiceTest extends TestCase
 
         self::assertSame(0, $summary->eligible);
         self::assertSame(2, $summary->skipped);
+        self::assertSame(2, $summary->linked);
         self::assertSame(1, $jira->bulkLookupCalls);
         self::assertSame([['checkout', 'password reset']], $jira->bulkLookupNames);
+        self::assertSame([
+            ['QA-456', 'PROJ-123', 'Tests', 'test_to_requirement'],
+            ['QA-457', 'PROJ-123', 'Tests', 'test_to_requirement'],
+        ], $jira->createdLinks);
         self::assertSame([
             'CheckoutTest::test_checkout' => ['issue_key' => 'QA-456'],
             'PasswordTest::test_reset' => ['issue_key' => 'QA-457'],

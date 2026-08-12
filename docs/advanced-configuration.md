@@ -83,9 +83,26 @@ The lookup uses the test-case name in this order:
 If an issue key is supplied by an attribute or mapping file, no name lookup is
 performed and the existing QAlity case name is never updated.
 
-The create command links only cases created during that invocation. Cases
-resolved from Jira or a mapping file are treated as existing and are skipped;
-they are not relinked to the branch work item.
+For `qality:create-test-cases`, the link target is resolved per test. An
+attribute `requirementIssueKey` takes precedence over the `--work-item` or
+branch work item. If no requirement is annotated, the work item is used as the
+fallback. This applies to newly imported cases and existing cases resolved
+from Jira or a mapping file; existing cases are not imported again, but their
+expected link is reconciled.
+
+The attribute can also override the global link settings for one test:
+
+```php
+#[QalityTestCase(
+    requirementIssueKey: 'REQ-42',
+    linkType: 'QAlity Test',
+    linkDirection: 'test_to_requirement',
+)]
+public function test_checkout_can_be_completed(): void
+{
+    // ...
+}
+```
 
 ## Jira authentication alternatives
 
@@ -151,10 +168,12 @@ inward description. For a Jira link type shown as
 `QAlity Test | tests | is tested by`, use `QAlity Test` and
 `test_to_requirement`.
 
-`QALITY_JIRA_LINKS_ENABLED` controls optional requirement links during
-publishing. Newly created test cases are always linked to the branch work item.
-Newly created test cases also receive `QALITY_JIRA_CREATED_TEST_LABEL`; set it
-to an empty value to disable the label.
+`QALITY_JIRA_LINKS_ENABLED` controls optional requirement links while
+publishing executions. The create command always honors an explicit
+`requirementIssueKey` and uses its work-item fallback, regardless of this
+publishing setting. Newly created test cases also receive
+`QALITY_JIRA_CREATED_TEST_LABEL`; set it to an empty value to disable the
+label.
 
 Keep `QALITY_JIRA_LINKS_ENABLED=false` unless the pipeline should also create
 requirement links while publishing executions. Enabling it changes Jira issue

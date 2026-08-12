@@ -30,6 +30,7 @@ final class CreateTestCasesService
         $mappingStore = new TestCaseMappingStore($mappingPath);
         $mappings = $mappingStore->load();
         $eligible = [];
+        $linkCandidates = [];
         $seen = [];
         $skipped = 0;
         $resolvedMappings = false;
@@ -53,7 +54,24 @@ final class CreateTestCasesService
 
             $seen[$testId] = true;
 
-            if ($this->hasIssueKey($record) || isset($mappings[$testId])) {
+            if ($this->hasIssueKey($record)) {
+                $linkCandidates[] = $this->linkCandidate(
+                    (string) $record['qality']['issue_key'],
+                    $record,
+                    $workItemKey,
+                );
+                $skipped++;
+
+                continue;
+            }
+
+            if (isset($mappings[$testId])) {
+                $issueKey = $mappings[$testId]['issue_key'] ?? null;
+
+                if (is_string($issueKey) && trim($issueKey) !== '') {
+                    $linkCandidates[] = $this->linkCandidate($issueKey, $record, $workItemKey);
+                }
+
                 $skipped++;
 
                 continue;
@@ -65,6 +83,7 @@ final class CreateTestCasesService
                 $mappings[$testId] = ['issue_key' => $issueKey];
                 $resolvedMappings = true;
                 $resolvedMappingCount++;
+                $linkCandidates[] = $this->linkCandidate($issueKey, $record, $workItemKey);
                 $skipped++;
 
                 continue;
@@ -79,6 +98,7 @@ final class CreateTestCasesService
             $eligible[] = [
                 'id' => $testId,
                 'name' => $name,
+                ...$this->linkCandidateFields($record, $workItemKey, ! $dryRun),
             ];
         }
 
@@ -96,7 +116,7 @@ final class CreateTestCasesService
             'dry_run' => $dryRun,
         ]);
 
-        if ($dryRun || $eligible === []) {
+        if ($dryRun) {
             return new CreateTestCasesSummary(
                 total: count($records),
                 eligible: count($eligible),
@@ -108,11 +128,36 @@ final class CreateTestCasesService
             );
         }
 
-        $projectId = $this->requiredString($this->options['project_id'] ?? null, 'QAlity project ID');
-        $linkType = $this->requiredString($this->options['link_type'] ?? null, 'Jira issue-link type');
-        $direction = (string) ($this->options['link_direction'] ?? 'test_to_requirement');
-        $createdCases = [];
         $linked = 0;
+
+        if ($linkCandidates !== []) {
+            Log::info('qality-plus Jira test-case linking started', [
+                'work_item' => $workItemKey,
+                'test_case_count' => count($linkCandidates),
+                'source' => 'existing',
+            ]);
+            $linked = $this->linkCases($linkCandidates);
+            Log::info('qality-plus Jira test-case linking completed', [
+                'work_item' => $workItemKey,
+                'test_case_count' => count($linkCandidates),
+                'linked_count' => $linked,
+                'source' => 'existing',
+            ]);
+        }
+
+        if ($eligible === []) {
+            return new CreateTestCasesSummary(
+                total: count($records),
+                eligible: 0,
+                created: 0,
+                linked: $linked,
+                skipped: $skipped,
+                workItemKey: $workItemKey,
+            );
+        }
+
+        $projectId = $this->requiredString($this->options['project_id'] ?? null, 'QAlity project ID');
+        $createdCases = [];
         $errors = [];
         $batches = array_chunk($eligible, $this->importBatchSize());
         $batchCount = count($batches);
@@ -167,10 +212,9 @@ final class CreateTestCasesService
                 'batch' => $batchNumber,
                 'batch_count' => $batchCount,
                 'test_case_count' => count($batchCreatedCases),
-                'link_type' => $linkType,
-                'link_direction' => $direction,
+                'source' => 'created',
             ]);
-            $batchLinked = $this->linkCases($batchCreatedCases, $workItemKey, $linkType, $direction);
+            $batchLinked = $this->linkCases($batchCreatedCases);
             $linked += $batchLinked;
             Log::info('qality-plus Jira test-case linking completed', [
                 'work_item' => $workItemKey,
@@ -178,8 +222,9 @@ final class CreateTestCasesService
                 'batch_count' => $batchCount,
                 'test_case_count' => count($batchCreatedCases),
                 'linked_count' => $batchLinked,
+                'source' => 'created',
             ]);
-            $this->labelCases($batchCreatedCases);
+            $this->labelCases(array_column($batchCreatedCases, 'test_case_key'));
 
             if (is_array($batchErrors)) {
                 $errors = array_merge($errors, $batchErrors);
@@ -221,18 +266,27 @@ final class CreateTestCasesService
     }
 
     /**
-     * @param  list<string>  $caseKeys
+     * @param  list<array{test_case_key: string, target_issue_key: string, link_type: string, link_direction: string}>  $candidates
      */
-    private function linkCases(array $caseKeys, string $workItemKey, string $linkType, string $direction): int
+    private function linkCases(array $candidates): int
     {
         $linked = 0;
 
-        foreach ($caseKeys as $caseKey) {
-            if ($this->jira->issueLinkExists($caseKey, $workItemKey, $linkType)) {
+        foreach ($candidates as $candidate) {
+            if ($this->jira->issueLinkExists(
+                $candidate['test_case_key'],
+                $candidate['target_issue_key'],
+                $candidate['link_type'],
+            )) {
                 continue;
             }
 
-            $this->jira->createIssueLink($caseKey, $workItemKey, $linkType, $direction);
+            $this->jira->createIssueLink(
+                $candidate['test_case_key'],
+                $candidate['target_issue_key'],
+                $candidate['link_type'],
+                $candidate['link_direction'],
+            );
             $linked++;
         }
 
@@ -306,7 +360,7 @@ final class CreateTestCasesService
      * @param  list<array<string, mixed>>  $batch
      * @param  list<mixed>  $success
      * @param  array<string, array{issue_key: string}>  $mappings
-     * @return list<string>
+     * @return list<array{test_case_key: string, target_issue_key: string, link_type: string, link_direction: string}>
      */
     private function mapImportedCases(array $batch, array $success, array &$mappings): array
     {
@@ -334,10 +388,66 @@ final class CreateTestCasesService
             }
 
             $mappings[$case['id']] = ['issue_key' => $key];
-            $createdCases[] = $key;
+            $createdCases[] = [
+                'test_case_key' => $key,
+                'target_issue_key' => $case['link_target'],
+                'link_type' => $case['link_type'],
+                'link_direction' => $case['link_direction'],
+            ];
         }
 
         return $createdCases;
+    }
+
+    /**
+     * @param  array<string, mixed>  $record
+     * @return array{link_target: string, link_type: string, link_direction: string}
+     */
+    private function linkCandidateFields(array $record, string $workItemKey, bool $validate = true): array
+    {
+        $metadata = $record['qality'] ?? null;
+        $metadata = is_array($metadata) ? $metadata : [];
+        $linkType = $metadata['link_type'] ?? $this->options['link_type'] ?? null;
+
+        return [
+            'link_target' => $this->requirementIssueKey($record) ?? $workItemKey,
+            'link_type' => $validate
+                ? $this->requiredString($linkType, 'Jira issue-link type')
+                : (is_scalar($linkType) ? (string) $linkType : ''),
+            'link_direction' => is_string($metadata['link_direction'] ?? null)
+                && trim($metadata['link_direction']) !== ''
+                ? $metadata['link_direction']
+                : (string) ($this->options['link_direction'] ?? 'test_to_requirement'),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $record
+     * @return array{test_case_key: string, target_issue_key: string, link_type: string, link_direction: string}
+     */
+    private function linkCandidate(string $testCaseKey, array $record, string $workItemKey): array
+    {
+        $fields = $this->linkCandidateFields($record, $workItemKey);
+
+        return [
+            'test_case_key' => $testCaseKey,
+            'target_issue_key' => $fields['link_target'],
+            'link_type' => $fields['link_type'],
+            'link_direction' => $fields['link_direction'],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $record
+     */
+    private function requirementIssueKey(array $record): ?string
+    {
+        $metadata = $record['qality'] ?? null;
+        $requirementIssueKey = is_array($metadata) ? $metadata['requirement_issue_key'] ?? null : null;
+
+        return is_string($requirementIssueKey) && trim($requirementIssueKey) !== ''
+            ? trim($requirementIssueKey)
+            : null;
     }
 
     private function importBatchSize(): int

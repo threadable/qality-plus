@@ -97,6 +97,12 @@ When no name is provided, the package uses the fully qualified PHPUnit class
 and method name, or the Pest test description. If an issue key is already
 available, the case is treated as existing and its name is not changed.
 
+`requirementIssueKey` is the source of truth for the Jira issue linked to that
+test. It overrides the `--work-item` value. When it is omitted, the branch
+work item is used as the fallback. This applies to both newly created and
+already existing QAlity test cases. `linkType` and `linkDirection` can override
+the configured defaults for an individual test.
+
 ## CI/CD commands
 
 Run the tests, then create or find the QAlity test cases on feature branches:
@@ -140,10 +146,11 @@ and authentication tokens are not logged.
 
 The mapping file is optional when `QALITY_JIRA_PROJECT_KEY` is configured. The
 create command first looks for an exact Jira test-case name in the configured
-project and creates a new case only when no matching case exists. The publish
-command uses the same lookup when a result has no issue key. Therefore, a
-pipeline may discard `.qality-test-map.json` after each run when test names are
-stable and unique; Jira is searched again on the next run.
+project and creates a new case only when no matching case exists. It also
+reconciles the Jira link for cases found through the mapping file or name
+lookup. The publish command uses the same lookup when a result has no issue
+key. Therefore, a pipeline may discard `.qality-test-map.json` after each run
+when test names are stable and unique; Jira is searched again on the next run.
 
 Name lookups are sent to Jira in batches, then compared against exact issue
 summaries locally. Only tests with no exact match are sent to the QAlity Plus
@@ -164,7 +171,7 @@ precedence over `--branch`.
 
 | Pipeline stage | Command | Result |
 | --- | --- | --- |
-| Feature branch | `qality:create-test-cases` | Finds existing cases or creates missing cases and links newly created cases to the branch work item |
+| Feature branch | `qality:create-test-cases` | Finds existing cases or creates missing cases and links each case to its annotated requirement, or to the branch work item when no requirement is annotated |
 | QA, UAT, production | `qality:publish` | Creates a QAlity Test Cycle and publishes passed, failed, and skipped executions |
 
 Store QAlity and Jira credentials as secured CI/CD variables. The package does
