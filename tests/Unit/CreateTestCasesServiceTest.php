@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Threadable\QalityPlus\Tests\Unit;
 
 use Threadable\QalityPlus\Publisher\CreateTestCasesService;
+use Threadable\QalityPlus\Publisher\JiraBulkTestCaseLookup;
 use Threadable\QalityPlus\Publisher\JiraClient;
 use Threadable\QalityPlus\Publisher\JiraIssueLabeler;
 use Threadable\QalityPlus\Publisher\JiraTestCaseLookup;
@@ -200,6 +201,46 @@ final class CreateTestCasesServiceTest extends TestCase
         self::assertSame('QA-456', json_decode((string) file_get_contents($path), true)['CheckoutTest::test_checkout']['issue_key']);
     }
 
+    public function test_it_resolves_multiple_existing_cases_with_one_bulk_lookup(): void
+    {
+        $path = $this->temporaryMappingPath();
+        $qality = new CreateFakeQalityClient;
+        $jira = new CreateFakeJiraClient;
+        $jira->testCaseKeysByName = [
+            'checkout' => ['QA-456'],
+            'password reset' => ['QA-457'],
+        ];
+        $service = new CreateTestCasesService(
+            $qality,
+            $jira,
+            [
+                'project_id' => '20001',
+                'link_type' => 'Tests',
+            ],
+            new JiraTestCaseResolver($jira, 'QA', 'QAlity Test'),
+        );
+
+        $summary = $service->create([
+            [
+                'test' => ['id' => 'CheckoutTest::test_checkout', 'name' => 'checkout'],
+                'qality' => null,
+            ],
+            [
+                'test' => ['id' => 'PasswordTest::test_reset', 'name' => 'password reset'],
+                'qality' => null,
+            ],
+        ], 'PROJ-123', $path);
+
+        self::assertSame(0, $summary->eligible);
+        self::assertSame(2, $summary->skipped);
+        self::assertSame(1, $jira->bulkLookupCalls);
+        self::assertSame([['checkout', 'password reset']], $jira->bulkLookupNames);
+        self::assertSame([
+            'CheckoutTest::test_checkout' => ['issue_key' => 'QA-456'],
+            'PasswordTest::test_reset' => ['issue_key' => 'QA-457'],
+        ], json_decode((string) file_get_contents($path), true));
+    }
+
     public function test_dry_run_does_not_require_api_configuration_or_call_upstreams(): void
     {
         $path = $this->temporaryMappingPath();
@@ -274,13 +315,18 @@ final class CreateFakeQalityClient implements QalityClient
     }
 }
 
-final class CreateFakeJiraClient implements JiraClient, JiraIssueLabeler, JiraTestCaseLookup
+final class CreateFakeJiraClient implements JiraBulkTestCaseLookup, JiraClient, JiraIssueLabeler, JiraTestCaseLookup
 {
     /** @var list<list<string>> */
     public array $createdLinks = [];
 
     /** @var array<string, list<string>> */
     public array $testCaseKeysByName = [];
+
+    public int $bulkLookupCalls = 0;
+
+    /** @var list<list<string>> */
+    public array $bulkLookupNames = [];
 
     /** @var list<list<string>> */
     public array $addedLabels = [];
@@ -293,6 +339,26 @@ final class CreateFakeJiraClient implements JiraClient, JiraIssueLabeler, JiraTe
     public function findTestCaseKeysByName(string $name, string $projectKey, string $issueType): array
     {
         return $this->testCaseKeysByName[$name] ?? [];
+    }
+
+    /**
+     * @param  list<string>  $names
+     * @return array<string, list<string>>
+     */
+    public function findTestCaseKeysByNames(array $names, string $projectKey, string $issueType): array
+    {
+        $this->bulkLookupCalls++;
+        $this->bulkLookupNames[] = $names;
+
+        $matches = [];
+
+        foreach ($names as $name) {
+            if (isset($this->testCaseKeysByName[$name])) {
+                $matches[$name] = $this->testCaseKeysByName[$name];
+            }
+        }
+
+        return $matches;
     }
 
     public function issueLinkExists(string $testIssueKey, string $requirementIssueKey, string $linkType): bool

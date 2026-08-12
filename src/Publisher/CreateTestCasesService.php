@@ -34,8 +34,11 @@ final class CreateTestCasesService
         $skipped = 0;
         $resolvedMappings = false;
         $resolvedMappingCount = 0;
+        $resolvedIssueKeys = ! $dryRun && $this->testCaseResolver !== null
+            ? $this->testCaseResolver->resolveMany($records)
+            : [];
 
-        foreach ($records as $record) {
+        foreach ($records as $recordIndex => $record) {
             $test = $record['test'] ?? null;
 
             if (! is_array($test) || ! is_string($test['id'] ?? null) || trim($test['id']) === '') {
@@ -56,17 +59,15 @@ final class CreateTestCasesService
                 continue;
             }
 
-            if (! $dryRun && $this->testCaseResolver !== null) {
-                $issueKey = $this->testCaseResolver->resolve($record);
+            if (isset($resolvedIssueKeys[$recordIndex])) {
+                $issueKey = $resolvedIssueKeys[$recordIndex];
 
-                if ($issueKey !== null) {
-                    $mappings[$testId] = ['issue_key' => $issueKey];
-                    $resolvedMappings = true;
-                    $resolvedMappingCount++;
-                    $skipped++;
+                $mappings[$testId] = ['issue_key' => $issueKey];
+                $resolvedMappings = true;
+                $resolvedMappingCount++;
+                $skipped++;
 
-                    continue;
-                }
+                continue;
             }
 
             $name = $this->nameResolver->resolve($record);

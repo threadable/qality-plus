@@ -7,8 +7,10 @@ namespace Threadable\QalityPlus\Publisher;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 
-final class HttpJiraClient extends HttpTransport implements JiraClient, JiraIssueLabeler, JiraTestCaseLookup
+final class HttpJiraClient extends HttpTransport implements JiraBulkTestCaseLookup, JiraClient, JiraIssueLabeler, JiraTestCaseLookup
 {
+    private const NAME_LOOKUP_BATCH_SIZE = 50;
+
     public function __construct(
         string $baseUrl,
         private readonly ?string $email,
@@ -62,6 +64,55 @@ final class HttpJiraClient extends HttpTransport implements JiraClient, JiraIssu
         }
 
         return array_values(array_unique($keys));
+    }
+
+    /**
+     * @param  list<string>  $names
+     * @return array<string, list<string>>
+     */
+    public function findTestCaseKeysByNames(array $names, string $projectKey, string $issueType): array
+    {
+        $names = array_values(array_unique(array_filter(
+            array_map(static fn (mixed $name): string => is_string($name) ? trim($name) : '', $names),
+            static fn (string $name): bool => $name !== '',
+        )));
+        $matches = [];
+
+        foreach (array_chunk($names, self::NAME_LOOKUP_BATCH_SIZE) as $batch) {
+            $payload = $this->sendJira('POST', '/rest/api/3/search/jql', [
+                'jql' => sprintf(
+                    'project = %s AND issuetype = %s AND summary in (%s)',
+                    $this->jqlString($projectKey),
+                    $this->jqlString($issueType),
+                    implode(', ', array_map(fn (string $name): string => $this->jqlString($name), $batch)),
+                ),
+                'fields' => ['summary'],
+                'maxResults' => self::NAME_LOOKUP_BATCH_SIZE,
+            ]);
+            $issues = $payload['issues'] ?? [];
+
+            if (! is_array($issues)) {
+                continue;
+            }
+
+            foreach ($issues as $issue) {
+                if (! is_array($issue)) {
+                    continue;
+                }
+
+                $summary = $issue['fields']['summary'] ?? null;
+                $key = $issue['key'] ?? null;
+
+                if (! is_string($summary) || ! in_array($summary, $batch, true) || ! is_string($key) || trim($key) === '') {
+                    continue;
+                }
+
+                $matches[$summary][] = $key;
+                $matches[$summary] = array_values(array_unique($matches[$summary]));
+            }
+        }
+
+        return $matches;
     }
 
     public function issueLinkExists(string $testIssueKey, string $requirementIssueKey, string $linkType): bool

@@ -134,13 +134,25 @@ If an upstream request fails, inspect the Laravel application log (normally
 `storage/logs/laravel.log`) and search for `qality-plus`. Entries identify
 whether the failure occurred in QAlity Plus or Jira, the configured host and
 HTTP endpoint, the attempt number, response status, retry decision, and
-command stage. Request payloads and authentication tokens are not logged.
+command stage. Timeout, DNS, and other connection failures are identified
+separately; HTTP failures include the returned status code. Request payloads
+and authentication tokens are not logged.
 
-The create command first looks for an exact Jira test-case name in the
-configured project. It creates a new case only when no matching case exists.
-The publish command uses the same lookup when a result has no issue key, so the
-feature pipeline does not need to transfer a mapping file to QA, UAT, or
-production when test names remain stable.
+The mapping file is optional when `QALITY_JIRA_PROJECT_KEY` is configured. The
+create command first looks for an exact Jira test-case name in the configured
+project and creates a new case only when no matching case exists. The publish
+command uses the same lookup when a result has no issue key. Therefore, a
+pipeline may discard `.qality-test-map.json` after each run when test names are
+stable and unique; Jira is searched again on the next run.
+
+Name lookups are sent to Jira in batches, then compared against exact issue
+summaries locally. Only tests with no exact match are sent to the QAlity Plus
+import endpoint.
+
+If `QALITY_JIRA_PROJECT_KEY` is not configured and the mapping file is absent,
+unmapped tests are sent to QAlity Plus for import on every run and may create
+duplicates. Also, `--dry-run` does not call Jira or QAlity, so its eligible
+count does not include name-based lookup results.
 
 Branches are expected to use `feature/KEY-123-description`,
 `hotfix/KEY-123-description`, or `bugfix/KEY-123-description`. Use `--branch`
@@ -152,7 +164,7 @@ precedence over `--branch`.
 
 | Pipeline stage | Command | Result |
 | --- | --- | --- |
-| Feature branch | `qality:create-test-cases` | Finds existing cases or creates missing cases and links new cases to the branch work item |
+| Feature branch | `qality:create-test-cases` | Finds existing cases or creates missing cases and links newly created cases to the branch work item |
 | QA, UAT, production | `qality:publish` | Creates a QAlity Test Cycle and publishes passed, failed, and skipped executions |
 
 Store QAlity and Jira credentials as secured CI/CD variables. The package does

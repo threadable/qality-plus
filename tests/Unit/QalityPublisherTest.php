@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Threadable\QalityPlus\Tests\Unit;
 
+use Threadable\QalityPlus\Publisher\JiraBulkTestCaseLookup;
 use Threadable\QalityPlus\Publisher\JiraClient;
 use Threadable\QalityPlus\Publisher\JiraTestCaseLookup;
 use Threadable\QalityPlus\Publisher\JiraTestCaseResolver;
@@ -71,6 +72,58 @@ final class QalityPublisherTest extends TestCase
 
         self::assertSame(1, $summary->published);
         self::assertSame(['10001'], $qality->addedCaseIds);
+    }
+
+    public function test_it_resolves_missing_issue_keys_with_one_bulk_lookup(): void
+    {
+        $qality = new FakeQalityClient;
+        $jira = new FakeJiraClient;
+        $jira->testCaseKeysByName = [
+            'checkout' => ['QA-456'],
+            'password reset' => ['QA-457'],
+        ];
+        $publisher = new QalityPublisher($qality, $jira, [
+            'project_id' => '20001',
+            'test_case_resolver' => new JiraTestCaseResolver($jira, 'QA', 'QAlity Test'),
+            'linking' => ['enabled' => false],
+        ]);
+
+        $summary = $publisher->publish([
+            [
+                'status' => 'passed',
+                'test' => ['id' => 'CheckoutTest::test_checkout', 'name' => 'checkout'],
+                'qality' => null,
+            ],
+            [
+                'status' => 'passed',
+                'test' => ['id' => 'PasswordTest::test_reset', 'name' => 'password reset'],
+                'qality' => null,
+            ],
+        ]);
+
+        self::assertSame(2, $summary->published);
+        self::assertSame(1, $jira->bulkLookupCalls);
+        self::assertSame([['checkout', 'password reset']], $jira->bulkLookupNames);
+        self::assertSame(['10001', '10002'], $qality->addedCaseIds);
+    }
+
+    public function test_dry_run_does_not_perform_bulk_name_lookup(): void
+    {
+        $jira = new FakeJiraClient;
+        $publisher = new QalityPublisher(new FakeQalityClient, $jira, [
+            'project_id' => '20001',
+            'test_case_resolver' => new JiraTestCaseResolver($jira, 'QA', 'QAlity Test'),
+        ]);
+
+        $summary = $publisher->publish([[
+            'status' => 'passed',
+            'test' => ['id' => 'CheckoutTest::test_checkout', 'name' => 'checkout'],
+            'qality' => null,
+        ]], dryRun: true);
+
+        self::assertTrue($summary->dryRun);
+        self::assertSame(0, $jira->bulkLookupCalls);
+        self::assertSame(1, $summary->skipped);
     }
 
     public function test_it_resolves_legacy_method_name_cases_after_class_qualified_lookup_misses(): void
@@ -288,12 +341,17 @@ final class FakeQalityClient implements QalityClient
     }
 }
 
-final class FakeJiraClient implements JiraClient, JiraTestCaseLookup
+final class FakeJiraClient implements JiraBulkTestCaseLookup, JiraClient, JiraTestCaseLookup
 {
     public bool $linkExists = false;
 
     /** @var array<string, list<string>> */
     public array $testCaseKeysByName = [];
+
+    public int $bulkLookupCalls = 0;
+
+    /** @var list<list<string>> */
+    public array $bulkLookupNames = [];
 
     /** @var array<string, string> */
     private array $issueIds = [];
@@ -311,6 +369,26 @@ final class FakeJiraClient implements JiraClient, JiraTestCaseLookup
     public function findTestCaseKeysByName(string $name, string $projectKey, string $issueType): array
     {
         return $this->testCaseKeysByName[$name] ?? [];
+    }
+
+    /**
+     * @param  list<string>  $names
+     * @return array<string, list<string>>
+     */
+    public function findTestCaseKeysByNames(array $names, string $projectKey, string $issueType): array
+    {
+        $this->bulkLookupCalls++;
+        $this->bulkLookupNames[] = $names;
+
+        $matches = [];
+
+        foreach ($names as $name) {
+            if (isset($this->testCaseKeysByName[$name])) {
+                $matches[$name] = $this->testCaseKeysByName[$name];
+            }
+        }
+
+        return $matches;
     }
 
     public function issueLinkExists(string $testIssueKey, string $requirementIssueKey, string $linkType): bool

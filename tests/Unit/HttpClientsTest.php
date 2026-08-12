@@ -142,6 +142,70 @@ final class HttpClientsTest extends TestCase
         });
     }
 
+    public function test_jira_finds_multiple_qality_test_cases_by_name_in_one_request(): void
+    {
+        Http::fake([
+            'https://jira.test/rest/api/3/search/jql' => Http::response([
+                'issues' => [
+                    ['key' => 'QA-123', 'fields' => ['summary' => 'Checkout works']],
+                    ['key' => 'QA-456', 'fields' => ['summary' => 'Password reset works']],
+                    ['key' => 'QA-999', 'fields' => ['summary' => 'Unrequested case']],
+                ],
+            ]),
+        ]);
+
+        $client = new HttpJiraClient(
+            baseUrl: 'https://jira.test',
+            email: 'ci@example.com',
+            apiToken: 'jira-token',
+            bearerToken: null,
+        );
+
+        self::assertSame([
+            'Checkout works' => ['QA-123'],
+            'Password reset works' => ['QA-456'],
+        ], $client->findTestCaseKeysByNames([
+            'Checkout works',
+            'Password reset works',
+        ], 'QA', 'QAlity Test'));
+
+        Http::assertSent(static function ($request): bool {
+            return $request->url() === 'https://jira.test/rest/api/3/search/jql'
+                && $request->data() === [
+                    'jql' => 'project = "QA" AND issuetype = "QAlity Test" AND summary in ("Checkout works", "Password reset works")',
+                    'fields' => ['summary'],
+                    'maxResults' => 50,
+                ];
+        });
+    }
+
+    public function test_jira_splits_large_name_lookups_into_batches(): void
+    {
+        Http::fake([
+            'https://jira.test/rest/api/3/search/jql' => Http::response(['issues' => []]),
+        ]);
+
+        $client = new HttpJiraClient(
+            baseUrl: 'https://jira.test',
+            email: 'ci@example.com',
+            apiToken: 'jira-token',
+            bearerToken: null,
+        );
+
+        $client->findTestCaseKeysByNames(
+            array_map(static fn (int $index): string => 'Test '.$index, range(1, 51)),
+            'QA',
+            'QAlity Test',
+        );
+
+        Http::assertSentCount(2);
+        Http::assertSent(static function ($request): bool {
+            $names = substr_count((string) $request->data()['jql'], 'Test ');
+
+            return $names <= 50 && $request->data()['maxResults'] === 50;
+        });
+    }
+
     public function test_qality_retries_transient_server_errors(): void
     {
         Http::fakeSequence()
@@ -245,7 +309,8 @@ final class HttpClientsTest extends TestCase
                 && $context['uri'] === '/testCycles'
                 && $context['attempt'] === 1
                 && $context['max_attempts'] === 4
-                && $context['status'] === 422;
+                && $context['status'] === 422
+                && $context['status_code'] === 422;
         });
     }
 
@@ -275,6 +340,7 @@ final class HttpClientsTest extends TestCase
                 && $context['attempt'] === 1
                 && $context['max_attempts'] === 2
                 && $context['status'] === 503
+                && $context['status_code'] === 503
                 && $context['retry_in_ms'] === 0;
         });
         Log::shouldHaveReceived('error')->once()->withArgs(static function (string $message, array $context): bool {
@@ -289,7 +355,7 @@ final class HttpClientsTest extends TestCase
     {
         Log::spy();
         Http::fake(static function (): never {
-            throw new ConnectionException('Could not resolve host: qality.test');
+            throw new ConnectionException('cURL error 28: Operation timed out after 120000 milliseconds');
         });
 
         $client = new HttpQalityClient('https://qality.test/api', 'qality-token', retries: 1, retryBackoffMs: 0);
@@ -299,7 +365,7 @@ final class HttpClientsTest extends TestCase
             self::fail('Expected a PublisherException.');
         } catch (PublisherException $exception) {
             self::assertSame(
-                'Unable to connect to QAlity Plus while calling POST /testCycles after 2 attempt(s).',
+                'Unable to connect to QAlity Plus while calling POST /testCycles after 2 attempt(s): request timed out; no HTTP response was received.',
                 $exception->getMessage(),
             );
         }
@@ -317,6 +383,10 @@ final class HttpClientsTest extends TestCase
                 && $context['upstream'] === 'QAlity Plus'
                 && $context['method'] === 'POST'
                 && $context['uri'] === '/testCycles'
+                && $context['failure_type'] === 'timeout'
+                && $context['status'] === null
+                && $context['response_received'] === false
+                && $context['timeout_seconds'] === 120
                 && $context['attempt'] === 2
                 && $context['max_attempts'] === 2
                 && $context['exception'] === ConnectionException::class;

@@ -6,9 +6,10 @@ behavior.
 
 ## Explicit mapping files
 
-Name-based Jira lookup is normally enough. Use an explicit mapping file when a
-test name can change, multiple QAlity cases have the same name, or pipelines
-must avoid Jira searches.
+Name-based Jira lookup is normally enough, and the mapping file may be absent
+or discarded between pipeline runs. Use an explicit mapping file when a test
+name can change, multiple QAlity cases have the same name, or pipelines must
+avoid Jira searches.
 
 Register the file in `phpunit.xml`:
 
@@ -45,9 +46,9 @@ The exact ID takes precedence over the base method ID. The mapping file itself
 does not infer cases from names.
 
 `qality:create-test-cases` writes returned QAlity issue keys to the mapping
-file. If the mapping file is used across pipelines, commit it or transfer it as
-a CI/CD artifact. Existing result files are not modified after a mapping is
-created.
+file when the file is writable, but it can resolve cases again through Jira
+name lookup when the file is not present. Existing result files are not
+modified after a mapping is created.
 
 ## Jira name-based lookup
 
@@ -69,6 +70,10 @@ returned Jira summaries exactly:
 The project key is a Jira project key and is separate from
 `QALITY_PLUS_PROJECT_ID`, which identifies the QAlity project.
 
+Lookups are batched into Jira search requests. The package compares returned
+summaries exactly, so partial JQL matches are ignored. Only tests without a
+matching issue are included in the QAlity Plus import.
+
 The lookup uses the test-case name in this order:
 
 1. `QalityTestCase(name: '...')`
@@ -77,6 +82,10 @@ The lookup uses the test-case name in this order:
 
 If an issue key is supplied by an attribute or mapping file, no name lookup is
 performed and the existing QAlity case name is never updated.
+
+The create command links only cases created during that invocation. Cases
+resolved from Jira or a mapping file are treated as existing and are skipped;
+they are not relinked to the branch work item.
 
 ## Jira authentication alternatives
 
@@ -120,11 +129,15 @@ QALITY_HTTP_RETRY_BACKOFF_MS=250
 
 Upstream request failures are written to the Laravel default log channel with
 the `qality-plus` prefix. The entries include the upstream (`QAlity Plus` or
-`Jira`), configured host, HTTP method, endpoint, attempt number, response
-status, and retry decision. Request payloads and authentication tokens are not
-logged. The create and publish commands also log the current processing stage
-and batch counts, which makes it possible to distinguish a QAlity import
-failure from a Jira lookup, link, or label failure.
+`Jira`), configured host, HTTP method, endpoint, attempt number, elapsed time,
+and retry decision. When an HTTP response exists, `status_code` records its
+status, including `429` rate-limit responses and any `Retry-After` header. A
+connection failure records `status_code: null`, `response_received: false`,
+and a `failure_type` such as `timeout`, `dns`, or `connection`. Request
+payloads and authentication tokens are not logged. The create and publish
+commands also log the current processing stage and batch counts, which makes it
+possible to distinguish a QAlity import failure from a Jira lookup, link, or
+label failure.
 
 `QALITY_JIRA_LINK_TYPE` is the Jira issue-link type name, not its outward or
 inward description. For a Jira link type shown as

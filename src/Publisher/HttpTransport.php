@@ -30,6 +30,8 @@ abstract class HttpTransport
         $maxAttempts = $this->retries + 1;
 
         do {
+            $attemptStartedAt = microtime(true);
+
             try {
                 $response = $request()->send(
                     $method,
@@ -39,16 +41,23 @@ abstract class HttpTransport
             } catch (ConnectionException $exception) {
                 if ($attempt >= $this->retries) {
                     $this->logFailure('upstream connection failed', $method, $uri, $attempt + 1, $maxAttempts, [
+                        'failure_type' => $this->connectionFailureType($exception),
+                        'status' => null,
+                        'status_code' => null,
+                        'response_received' => false,
+                        'duration_ms' => $this->durationMs($attemptStartedAt),
+                        'timeout_seconds' => $this->timeout,
                         'exception' => $exception::class,
                         'error' => $this->safeException($exception),
                     ]);
 
                     throw new PublisherException(sprintf(
-                        'Unable to connect to %s while calling %s %s after %d attempt(s).',
+                        'Unable to connect to %s while calling %s %s after %d attempt(s): %s; no HTTP response was received.',
                         $this->upstream,
                         strtoupper($method),
                         $uri,
                         $attempt + 1,
+                        $this->connectionFailureReason($exception),
                     ), previous: $exception);
                 }
 
@@ -59,6 +68,12 @@ abstract class HttpTransport
                     $attempt,
                     $maxAttempts,
                     [
+                        'failure_type' => $this->connectionFailureType($exception),
+                        'status' => null,
+                        'status_code' => null,
+                        'response_received' => false,
+                        'duration_ms' => $this->durationMs($attemptStartedAt),
+                        'timeout_seconds' => $this->timeout,
                         'retry_in_ms' => $retryInMs,
                         'exception' => $exception::class,
                         'error' => $this->safeException($exception),
@@ -86,7 +101,12 @@ abstract class HttpTransport
                     $attempt,
                     $maxAttempts,
                     [
+                        'failure_type' => $response->status() === 429 ? 'rate_limited' : 'retryable_http',
                         'status' => $response->status(),
+                        'status_code' => $response->status(),
+                        'response_received' => true,
+                        'duration_ms' => $this->durationMs($attemptStartedAt),
+                        'retry_after' => $response->header('Retry-After'),
                         'retry_in_ms' => $retryInMs,
                     ],
                 ));
@@ -96,7 +116,12 @@ abstract class HttpTransport
 
             $error = $this->safeError($response);
             $this->logFailure('upstream request failed', $method, $uri, $attempt + 1, $maxAttempts, [
+                'failure_type' => 'http_response',
                 'status' => $response->status(),
+                'status_code' => $response->status(),
+                'response_received' => true,
+                'duration_ms' => $this->durationMs($attemptStartedAt),
+                'retry_after' => $response->header('Retry-After'),
                 'error' => $error,
             ]);
 
@@ -172,5 +197,34 @@ abstract class HttpTransport
     private function safeException(ConnectionException $exception): string
     {
         return substr(trim($exception->getMessage()), 0, 1000);
+    }
+
+    private function connectionFailureType(ConnectionException $exception): string
+    {
+        $message = strtolower($exception->getMessage());
+
+        if (str_contains($message, 'timed out') || str_contains($message, 'timeout') || str_contains($message, 'curl error 28')) {
+            return 'timeout';
+        }
+
+        if (str_contains($message, 'could not resolve') || str_contains($message, 'name or service not known')) {
+            return 'dns';
+        }
+
+        return 'connection';
+    }
+
+    private function connectionFailureReason(ConnectionException $exception): string
+    {
+        return match ($this->connectionFailureType($exception)) {
+            'timeout' => 'request timed out',
+            'dns' => 'DNS lookup failed',
+            default => 'connection failed',
+        };
+    }
+
+    private function durationMs(float $startedAt): int
+    {
+        return (int) round((microtime(true) - $startedAt) * 1000);
     }
 }
