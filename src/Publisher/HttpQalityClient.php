@@ -12,8 +12,8 @@ final class HttpQalityClient extends HttpTransport implements QalityClient
     public function __construct(
         string $baseUrl,
         private readonly string $token,
-        int $timeout = 30,
-        int $retries = 2,
+        int $timeout = 120,
+        int $retries = 0,
         int $retryBackoffMs = 250,
     ) {
         parent::__construct($baseUrl, $timeout, $retries, $retryBackoffMs, 'QAlity Plus');

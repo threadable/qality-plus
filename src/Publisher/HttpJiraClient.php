@@ -14,8 +14,8 @@ final class HttpJiraClient extends HttpTransport implements JiraClient, JiraIssu
         private readonly ?string $email,
         private readonly ?string $apiToken,
         private readonly ?string $bearerToken,
-        int $timeout = 30,
-        int $retries = 2,
+        int $timeout = 120,
+        int $retries = 0,
         int $retryBackoffMs = 250,
     ) {
         parent::__construct($baseUrl, $timeout, $retries, $retryBackoffMs, 'Jira');

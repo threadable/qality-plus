@@ -113,8 +113,8 @@ QALITY_JIRA_LINKS_ENABLED=false
 QALITY_JIRA_LINK_TYPE="QAlity Test"
 QALITY_JIRA_LINK_DIRECTION=test_to_requirement
 QALITY_JIRA_CREATED_TEST_LABEL=threadable-qality-plus
-QALITY_HTTP_TIMEOUT=30
-QALITY_HTTP_RETRIES=2
+QALITY_HTTP_TIMEOUT=120
+QALITY_HTTP_RETRIES=0
 QALITY_HTTP_RETRY_BACKOFF_MS=250
 ```
 
@@ -135,6 +135,14 @@ inward description. For a Jira link type shown as
 publishing. Newly created test cases are always linked to the branch work item.
 Newly created test cases also receive `QALITY_JIRA_CREATED_TEST_LABEL`; set it
 to an empty value to disable the label.
+
+Keep `QALITY_JIRA_LINKS_ENABLED=false` unless the pipeline should also create
+requirement links while publishing executions. Enabling it changes Jira issue
+relationships and requires the configured link type and Jira permissions.
+
+Retries default to zero because QAlity imports, cycle creation, and execution
+publishing use non-idempotent requests. Enable retries only when the upstream
+operation is known to be safe to repeat.
 
 The test-case import does not set the Jira workflow status. The status assigned
 by the Jira project workflow remains in effect; execution outcomes are

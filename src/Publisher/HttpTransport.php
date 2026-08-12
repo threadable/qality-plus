@@ -13,8 +13,8 @@ abstract class HttpTransport
 {
     public function __construct(
         protected readonly string $baseUrl,
-        protected readonly int $timeout = 30,
-        protected readonly int $retries = 2,
+        protected readonly int $timeout = 120,
+        protected readonly int $retries = 0,
         protected readonly int $retryBackoffMs = 250,
         protected readonly string $upstream = 'upstream',
     ) {}

@@ -36,8 +36,8 @@ return [
     ],
 
     'publisher' => [
-        'timeout' => (int) env('QALITY_HTTP_TIMEOUT', 30),
-        'retries' => (int) env('QALITY_HTTP_RETRIES', 2),
+        'timeout' => (int) env('QALITY_HTTP_TIMEOUT', 120),
+        'retries' => (int) env('QALITY_HTTP_RETRIES', 0),
         'retry_backoff_ms' => (int) env('QALITY_HTTP_RETRY_BACKOFF_MS', 250),
         'linking' => [
             'enabled' => (bool) env('QALITY_JIRA_LINKS_ENABLED', false),
