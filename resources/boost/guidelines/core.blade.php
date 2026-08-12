@@ -94,6 +94,15 @@ php artisan qality:create-test-cases --branch=feature/PROJ-123-checkout
 </code-snippet>
 @endverbatim
 
+If the CI system provides the Jira work item separately, use `--work-item` to
+skip branch detection and parsing:
+
+@verbatim
+<code-snippet name="Create cases with an explicit work item" lang="shell">
+php artisan qality:create-test-cases --work-item=PROJ-123
+</code-snippet>
+@endverbatim
+
 During QA, UAT, or production publishing, run tests and publish executions:
 
 @verbatim

@@ -46,6 +46,20 @@ final class CommandsTest extends TestCase
             ->assertExitCode(0);
     }
 
+    public function test_create_command_can_use_a_work_item_without_parsing_the_branch(): void
+    {
+        $this->writeResult('CheckoutTest::test_checkout', 'test_checkout');
+        config(['qality.results.directory' => $this->resultPath]);
+
+        $this->artisan('qality:create-test-cases', [
+            '--branch' => 'chore/update-dependencies',
+            '--work-item' => 'PROJ-123',
+            '--dry-run' => true,
+        ])
+            ->expectsOutputToContain('Validated 1 eligible test case(s) for PROJ-123')
+            ->assertExitCode(0);
+    }
+
     public function test_create_command_imports_and_links_a_missing_case(): void
     {
         $this->writeResult('CheckoutTest::test_checkout', 'test_checkout');

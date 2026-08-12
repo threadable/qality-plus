@@ -19,6 +19,7 @@ final class CreateQalityTestCasesCommand extends Command
     protected $signature = 'qality:create-test-cases
         {path? : A JSONL result file or directory; defaults to storage/qality}
         {--branch= : Git branch name; otherwise the current branch is detected}
+        {--work-item= : Jira work-item key; skips branch detection and parsing}
         {--mapping-file= : JSON mapping file; defaults to .qality-test-map.json}
         {--dry-run : Validate and summarize without calling QAlity or Jira}';
 
@@ -27,11 +28,10 @@ final class CreateQalityTestCasesCommand extends Command
     public function handle(QalityClient $qality, JiraClient $jira): int
     {
         try {
-            $branch = is_string($this->option('branch')) && trim($this->option('branch')) !== ''
-                ? $this->option('branch')
-                : (new GitBranchResolver)->current();
-            $workItemKey = (new BranchWorkItemResolver((string) config('qality.create.branch_pattern')))
-                ->resolve($branch);
+            $workItem = $this->option('work-item');
+            $workItemKey = is_string($workItem) && trim($workItem) !== ''
+                ? trim($workItem)
+                : $this->workItemFromBranch();
             $records = (new JsonlResultReader((int) config('qality.results.schema_version', 1)))
                 ->readPath($this->resultsPath());
             $mappingFile = $this->mappingFile();
@@ -70,6 +70,16 @@ final class CreateQalityTestCasesCommand extends Command
         ));
 
         return self::SUCCESS;
+    }
+
+    private function workItemFromBranch(): string
+    {
+        $branch = is_string($this->option('branch')) && trim($this->option('branch')) !== ''
+            ? $this->option('branch')
+            : (new GitBranchResolver)->current();
+
+        return (new BranchWorkItemResolver((string) config('qality.create.branch_pattern')))
+            ->resolve($branch);
     }
 
     private function mappingFile(): string

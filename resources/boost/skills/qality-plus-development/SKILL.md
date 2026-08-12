@@ -20,6 +20,9 @@ publishing commands.
    stable, readable name.
 5. On feature, hotfix, or bugfix branches, run
    `qality:create-test-cases --branch=...` after the tests.
+   If the CI system provides the Jira work item separately, use
+   `qality:create-test-cases --work-item=...`; this skips branch detection and
+   parsing.
 6. On QA, UAT, or production publishing, run `qality:publish` after the tests.
 
 ## Mapping behavior

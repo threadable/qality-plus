@@ -106,6 +106,13 @@ php artisan test
 php artisan qality:create-test-cases --branch feature/PROJ-123-checkout
 ```
 
+When the pipeline does not expose a branch name, provide the Jira work item
+directly. This skips branch detection and parsing:
+
+```bash
+php artisan qality:create-test-cases --work-item PROJ-123
+```
+
 On QA, UAT, and production deployments, run the tests and publish their
 executions:
 
@@ -131,7 +138,9 @@ production when test names remain stable.
 
 Branches are expected to use `feature/KEY-123-description`,
 `hotfix/KEY-123-description`, or `bugfix/KEY-123-description`. Use `--branch`
-for CI systems where the branch cannot be detected automatically.
+for CI systems where the branch cannot be detected automatically. Use
+`--work-item` when the work item is already available separately; it takes
+precedence over `--branch`.
 
 ## Workflow
 
