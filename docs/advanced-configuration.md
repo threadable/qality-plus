@@ -112,6 +112,7 @@ token; it does not obtain or refresh OAuth tokens.
 
 ```dotenv
 QALITY_PLUS_BASE_URL=https://apps-qalityplus.soldevelo.com/api
+QALITY_IMPORT_BATCH_SIZE=50
 QALITY_PLUS_CYCLE_ID=
 QALITY_PLUS_CYCLE_NAME=
 QALITY_PLUS_CYCLE_COMMENT=
@@ -122,10 +123,16 @@ QALITY_JIRA_LINKS_ENABLED=false
 QALITY_JIRA_LINK_TYPE="QAlity Test"
 QALITY_JIRA_LINK_DIRECTION=test_to_requirement
 QALITY_JIRA_CREATED_TEST_LABEL=threadable-qality-plus
-QALITY_HTTP_TIMEOUT=120
+QALITY_HTTP_TIMEOUT=300
 QALITY_HTTP_RETRIES=0
 QALITY_HTTP_RETRY_BACKOFF_MS=250
 ```
+
+Missing test cases are imported in batches controlled by
+`QALITY_IMPORT_BATCH_SIZE` (50 by default). The mapping file is written after
+each successful batch, so a later batch failure does not discard earlier
+results. In stateless pipelines, Jira name lookup can reconcile those earlier
+results on the next run.
 
 Upstream request failures are written to the Laravel default log channel with
 the `qality-plus` prefix. The entries include the upstream (`QAlity Plus` or

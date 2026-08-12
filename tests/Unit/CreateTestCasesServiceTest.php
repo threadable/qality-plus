@@ -241,6 +241,36 @@ final class CreateTestCasesServiceTest extends TestCase
         ], json_decode((string) file_get_contents($path), true));
     }
 
+    public function test_it_imports_missing_cases_in_configured_batches(): void
+    {
+        $path = $this->temporaryMappingPath();
+        $qality = new CreateFakeQalityClient;
+        $service = new CreateTestCasesService($qality, new CreateFakeJiraClient, [
+            'project_id' => '20001',
+            'link_type' => 'Tests',
+            'import_batch_size' => 2,
+            'created_test_label' => '',
+        ]);
+        $records = [];
+
+        foreach (range(1, 5) as $index) {
+            $records[] = [
+                'test' => ['id' => 'CheckoutTest::test_'.$index, 'name' => 'checkout '.$index],
+                'qality' => null,
+            ];
+        }
+
+        $summary = $service->create($records, 'PROJ-123', $path);
+
+        self::assertSame(5, $summary->created);
+        self::assertSame(3, $qality->importCalls);
+        self::assertSame([2, 2, 1], array_map(
+            static fn (array $payload): int => count($payload['testCases']),
+            $qality->importPayloads,
+        ));
+        self::assertCount(5, json_decode((string) file_get_contents($path), true));
+    }
+
     public function test_dry_run_does_not_require_api_configuration_or_call_upstreams(): void
     {
         $path = $this->temporaryMappingPath();
@@ -273,12 +303,19 @@ final class CreateFakeQalityClient implements QalityClient
     /** @var array<string, mixed> */
     public array $importPayload = [];
 
+    public int $importCalls = 0;
+
+    /** @var list<array<string, mixed>> */
+    public array $importPayloads = [];
+
     public function importTestCases(string $projectId, array $testCases): array
     {
+        $this->importCalls++;
         $this->importPayload = [
             'projectId' => $projectId,
             'testCases' => $testCases,
         ];
+        $this->importPayloads[] = $this->importPayload;
 
         return [
             'success' => array_map(static fn (array $testCase): array => [

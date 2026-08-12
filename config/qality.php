@@ -12,6 +12,7 @@ return [
         'base_url' => env('QALITY_PLUS_BASE_URL', 'https://apps-qalityplus.soldevelo.com/api'),
         'token' => env('QALITY_PLUS_API_TOKEN'),
         'project_id' => env('QALITY_PLUS_PROJECT_ID'),
+        'import_batch_size' => (int) env('QALITY_IMPORT_BATCH_SIZE', 50),
         'cycle_id' => env('QALITY_PLUS_CYCLE_ID'),
         'cycle_name' => env('QALITY_PLUS_CYCLE_NAME'),
         'cycle_comment' => env('QALITY_PLUS_CYCLE_COMMENT'),
@@ -36,7 +37,7 @@ return [
     ],
 
     'publisher' => [
-        'timeout' => (int) env('QALITY_HTTP_TIMEOUT', 120),
+        'timeout' => (int) env('QALITY_HTTP_TIMEOUT', 300),
         'retries' => (int) env('QALITY_HTTP_RETRIES', 0),
         'retry_backoff_ms' => (int) env('QALITY_HTTP_RETRY_BACKOFF_MS', 250),
         'linking' => [

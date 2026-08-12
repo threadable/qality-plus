@@ -16,7 +16,7 @@ final class HttpJiraClient extends HttpTransport implements JiraBulkTestCaseLook
         private readonly ?string $email,
         private readonly ?string $apiToken,
         private readonly ?string $bearerToken,
-        int $timeout = 120,
+        int $timeout = 300,
         int $retries = 0,
         int $retryBackoffMs = 250,
     ) {

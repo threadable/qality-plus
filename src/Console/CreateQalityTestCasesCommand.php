@@ -43,6 +43,7 @@ final class CreateQalityTestCasesCommand extends Command
             $linking = config('qality.publisher.linking', []);
             $service = new CreateTestCasesService($qality, $jira, [
                 'project_id' => config('qality.qality.project_id'),
+                'import_batch_size' => config('qality.qality.import_batch_size', 50),
                 'link_type' => is_array($linking) ? $linking['type'] ?? null : null,
                 'link_direction' => is_array($linking) ? $linking['direction'] ?? 'test_to_requirement' : 'test_to_requirement',
                 'created_test_label' => config('qality.jira.created_test_label'),

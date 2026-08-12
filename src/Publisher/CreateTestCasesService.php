@@ -111,85 +111,91 @@ final class CreateTestCasesService
         $projectId = $this->requiredString($this->options['project_id'] ?? null, 'QAlity project ID');
         $linkType = $this->requiredString($this->options['link_type'] ?? null, 'Jira issue-link type');
         $direction = (string) ($this->options['link_direction'] ?? 'test_to_requirement');
-        Log::info('qality-plus QAlity test-case import started', [
-            'work_item' => $workItemKey,
-            'project_id' => $projectId,
-            'test_case_count' => count($eligible),
-            'request_method' => 'POST',
-            'request_uri' => '/testCases/import',
-        ]);
-        $imported = $this->qality->importTestCases($projectId, array_map(
-            static fn (array $case): array => [
-                'name' => $case['name'],
-                'testSteps' => [],
-            ],
-            $eligible,
-        ));
-
-        $success = $imported['success'] ?? null;
-        $errors = $imported['errors'] ?? null;
-        Log::info('qality-plus QAlity test-case import completed', [
-            'work_item' => $workItemKey,
-            'success_count' => is_array($success) ? count($success) : null,
-            'error_count' => is_array($errors) ? count($errors) : null,
-        ]);
-
-        if (! is_array($success)) {
-            throw new PublisherException('QAlity test-case import response did not contain a success list.');
-        }
-
-        $keysByName = [];
-
-        foreach ($success as $case) {
-            if (! is_array($case) || ! is_string($case['name'] ?? null) || ! is_string($case['testCaseKey'] ?? null) || trim($case['testCaseKey']) === '') {
-                throw new PublisherException('QAlity test-case import response contained an invalid success entry.');
-            }
-
-            $keysByName[$case['name']][] = $case['testCaseKey'];
-        }
-
         $createdCases = [];
+        $linked = 0;
+        $errors = [];
+        $batches = array_chunk($eligible, $this->importBatchSize());
+        $batchCount = count($batches);
 
-        foreach ($eligible as $case) {
-            $key = null;
+        foreach ($batches as $batchIndex => $batch) {
+            $batchNumber = $batchIndex + 1;
+            Log::info('qality-plus QAlity test-case import started', [
+                'work_item' => $workItemKey,
+                'project_id' => $projectId,
+                'batch' => $batchNumber,
+                'batch_count' => $batchCount,
+                'test_case_count' => count($batch),
+                'total_test_case_count' => count($eligible),
+                'request_method' => 'POST',
+                'request_uri' => '/testCases/import',
+            ]);
+            $imported = $this->qality->importTestCases($projectId, array_map(
+                static fn (array $case): array => [
+                    'name' => $case['name'],
+                    'testSteps' => [],
+                ],
+                $batch,
+            ));
 
-            if (isset($keysByName[$case['name']]) && $keysByName[$case['name']] !== []) {
-                $key = array_shift($keysByName[$case['name']]);
+            $success = $imported['success'] ?? null;
+            $batchErrors = $imported['errors'] ?? [];
+            Log::info('qality-plus QAlity test-case import completed', [
+                'work_item' => $workItemKey,
+                'batch' => $batchNumber,
+                'batch_count' => $batchCount,
+                'success_count' => is_array($success) ? count($success) : null,
+                'error_count' => is_array($batchErrors) ? count($batchErrors) : null,
+            ]);
+
+            if (! is_array($success)) {
+                throw new PublisherException(sprintf(
+                    'QAlity test-case import response did not contain a success list for batch %d of %d.',
+                    $batchNumber,
+                    $batchCount,
+                ));
             }
 
-            if (! is_string($key) || trim($key) === '') {
-                continue;
+            $batchCreatedCases = $this->mapImportedCases($batch, $success, $mappings);
+            $createdCases = array_merge($createdCases, $batchCreatedCases);
+
+            if ($batchCreatedCases !== []) {
+                $mappingStore->save($mappings);
             }
 
-            $mappings[$case['id']] = ['issue_key' => $key];
-            $createdCases[] = $key;
+            Log::info('qality-plus Jira test-case linking started', [
+                'work_item' => $workItemKey,
+                'batch' => $batchNumber,
+                'batch_count' => $batchCount,
+                'test_case_count' => count($batchCreatedCases),
+                'link_type' => $linkType,
+                'link_direction' => $direction,
+            ]);
+            $batchLinked = $this->linkCases($batchCreatedCases, $workItemKey, $linkType, $direction);
+            $linked += $batchLinked;
+            Log::info('qality-plus Jira test-case linking completed', [
+                'work_item' => $workItemKey,
+                'batch' => $batchNumber,
+                'batch_count' => $batchCount,
+                'test_case_count' => count($batchCreatedCases),
+                'linked_count' => $batchLinked,
+            ]);
+            $this->labelCases($batchCreatedCases);
+
+            if (is_array($batchErrors)) {
+                $errors = array_merge($errors, $batchErrors);
+            }
         }
 
-        if ($createdCases !== []) {
-            $mappingStore->save($mappings);
-        }
-
-        Log::info('qality-plus Jira test-case linking started', [
-            'work_item' => $workItemKey,
-            'test_case_count' => count($createdCases),
-            'link_type' => $linkType,
-            'link_direction' => $direction,
-        ]);
-        $linked = $this->linkCases($createdCases, $workItemKey, $linkType, $direction);
-        Log::info('qality-plus Jira test-case linking completed', [
-            'work_item' => $workItemKey,
-            'test_case_count' => count($createdCases),
-            'linked_count' => $linked,
-        ]);
-        $this->labelCases($createdCases);
-        $errors = $imported['errors'] ?? [];
-
-        if (is_array($errors) && $errors !== []) {
+        if ($errors !== []) {
             throw new PublisherException($this->importErrorMessage($errors));
         }
 
         if (count($createdCases) !== count($eligible)) {
-            throw new PublisherException('QAlity test-case import did not return a case for every requested test.');
+            throw new PublisherException(sprintf(
+                'QAlity test-case import did not return a case for every requested test (%d of %d).',
+                count($createdCases),
+                count($eligible),
+            ));
         }
 
         return new CreateTestCasesSummary(
@@ -294,5 +300,50 @@ final class CreateTestCasesService
         }
 
         return (string) $value;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $batch
+     * @param  list<mixed>  $success
+     * @param  array<string, array{issue_key: string}>  $mappings
+     * @return list<string>
+     */
+    private function mapImportedCases(array $batch, array $success, array &$mappings): array
+    {
+        $keysByName = [];
+
+        foreach ($success as $case) {
+            if (! is_array($case) || ! is_string($case['name'] ?? null) || ! is_string($case['testCaseKey'] ?? null) || trim($case['testCaseKey']) === '') {
+                throw new PublisherException('QAlity test-case import response contained an invalid success entry.');
+            }
+
+            $keysByName[$case['name']][] = $case['testCaseKey'];
+        }
+
+        $createdCases = [];
+
+        foreach ($batch as $case) {
+            $key = null;
+
+            if (isset($keysByName[$case['name']]) && $keysByName[$case['name']] !== []) {
+                $key = array_shift($keysByName[$case['name']]);
+            }
+
+            if (! is_string($key) || trim($key) === '') {
+                continue;
+            }
+
+            $mappings[$case['id']] = ['issue_key' => $key];
+            $createdCases[] = $key;
+        }
+
+        return $createdCases;
+    }
+
+    private function importBatchSize(): int
+    {
+        $size = $this->options['import_batch_size'] ?? 50;
+
+        return is_numeric($size) && (int) $size > 0 ? (int) $size : 50;
     }
 }

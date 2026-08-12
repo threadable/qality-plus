@@ -20,9 +20,10 @@ No unreleased changes.
 - Class-qualified fallback names for PHPUnit test cases.
 - Configurable labels for newly created Jira test cases.
 - Diagnostic logging for upstream requests, retries, command stages, and test-case import batches.
-- Increased the default upstream HTTP timeout to 120 seconds for bulk imports.
+- Increased the default upstream HTTP timeout to 300 seconds for bulk imports.
 - Disabled upstream retries by default to avoid duplicate non-idempotent requests.
 - Batched Jira name lookups before importing or publishing test cases.
+- Batched QAlity test-case imports and persisted mappings after each successful batch.
 - Added connection-failure classification, response status codes, durations, and rate-limit details to diagnostics.
 
 ### Fixed

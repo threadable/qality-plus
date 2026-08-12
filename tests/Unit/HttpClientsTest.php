@@ -386,7 +386,7 @@ final class HttpClientsTest extends TestCase
                 && $context['failure_type'] === 'timeout'
                 && $context['status'] === null
                 && $context['response_received'] === false
-                && $context['timeout_seconds'] === 120
+                && $context['timeout_seconds'] === 300
                 && $context['attempt'] === 2
                 && $context['max_attempts'] === 2
                 && $context['exception'] === ConnectionException::class;

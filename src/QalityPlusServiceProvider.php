@@ -22,7 +22,7 @@ final class QalityPlusServiceProvider extends ServiceProvider
             return new HttpQalityClient(
                 baseUrl: (string) config('qality.qality.base_url'),
                 token: (string) config('qality.qality.token'),
-                timeout: (int) config('qality.publisher.timeout', 120),
+                timeout: (int) config('qality.publisher.timeout', 300),
                 retries: (int) config('qality.publisher.retries', 0),
                 retryBackoffMs: (int) config('qality.publisher.retry_backoff_ms', 250),
             );
@@ -34,7 +34,7 @@ final class QalityPlusServiceProvider extends ServiceProvider
                 email: config('qality.jira.email'),
                 apiToken: config('qality.jira.api_token'),
                 bearerToken: config('qality.jira.bearer_token'),
-                timeout: (int) config('qality.publisher.timeout', 120),
+                timeout: (int) config('qality.publisher.timeout', 300),
                 retries: (int) config('qality.publisher.retries', 0),
                 retryBackoffMs: (int) config('qality.publisher.retry_backoff_ms', 250),
             );
