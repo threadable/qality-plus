@@ -18,7 +18,7 @@ final class HttpJiraClient extends HttpTransport implements JiraClient, JiraIssu
         int $retries = 2,
         int $retryBackoffMs = 250,
     ) {
-        parent::__construct($baseUrl, $timeout, $retries, $retryBackoffMs);
+        parent::__construct($baseUrl, $timeout, $retries, $retryBackoffMs, 'Jira');
     }
 
     public function issue(string $issueKey): array

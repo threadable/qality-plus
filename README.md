@@ -130,6 +130,12 @@ php artisan qality:create-test-cases --branch feature/PROJ-123-checkout --dry-ru
 php artisan qality:publish --dry-run
 ```
 
+If an upstream request fails, inspect the Laravel application log (normally
+`storage/logs/laravel.log`) and search for `qality-plus`. Entries identify
+whether the failure occurred in QAlity Plus or Jira, the configured host and
+HTTP endpoint, the attempt number, response status, retry decision, and
+command stage. Request payloads and authentication tokens are not logged.
+
 The create command first looks for an exact Jira test-case name in the
 configured project. It creates a new case only when no matching case exists.
 The publish command uses the same lookup when a result has no issue key, so the

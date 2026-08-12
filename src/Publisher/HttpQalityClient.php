@@ -16,7 +16,7 @@ final class HttpQalityClient extends HttpTransport implements QalityClient
         int $retries = 2,
         int $retryBackoffMs = 250,
     ) {
-        parent::__construct($baseUrl, $timeout, $retries, $retryBackoffMs);
+        parent::__construct($baseUrl, $timeout, $retries, $retryBackoffMs, 'QAlity Plus');
     }
 
     /**

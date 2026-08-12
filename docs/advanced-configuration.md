@@ -118,6 +118,14 @@ QALITY_HTTP_RETRIES=2
 QALITY_HTTP_RETRY_BACKOFF_MS=250
 ```
 
+Upstream request failures are written to the Laravel default log channel with
+the `qality-plus` prefix. The entries include the upstream (`QAlity Plus` or
+`Jira`), configured host, HTTP method, endpoint, attempt number, response
+status, and retry decision. Request payloads and authentication tokens are not
+logged. The create and publish commands also log the current processing stage
+and batch counts, which makes it possible to distinguish a QAlity import
+failure from a Jira lookup, link, or label failure.
+
 `QALITY_JIRA_LINK_TYPE` is the Jira issue-link type name, not its outward or
 inward description. For a Jira link type shown as
 `QAlity Test | tests | is tested by`, use `QAlity Test` and

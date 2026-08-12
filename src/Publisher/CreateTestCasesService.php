@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Threadable\QalityPlus\Publisher;
 
+use Illuminate\Support\Facades\Log;
+
 final class CreateTestCasesService
 {
     private readonly TestCaseNameResolver $nameResolver;
@@ -31,6 +33,7 @@ final class CreateTestCasesService
         $seen = [];
         $skipped = 0;
         $resolvedMappings = false;
+        $resolvedMappingCount = 0;
 
         foreach ($records as $record) {
             $test = $record['test'] ?? null;
@@ -59,6 +62,7 @@ final class CreateTestCasesService
                 if ($issueKey !== null) {
                     $mappings[$testId] = ['issue_key' => $issueKey];
                     $resolvedMappings = true;
+                    $resolvedMappingCount++;
                     $skipped++;
 
                     continue;
@@ -81,6 +85,16 @@ final class CreateTestCasesService
             $mappingStore->save($mappings);
         }
 
+        Log::info('qality-plus test case creation prepared', [
+            'work_item' => $workItemKey,
+            'record_count' => count($records),
+            'unique_test_count' => count($seen),
+            'eligible_count' => count($eligible),
+            'skipped_count' => $skipped,
+            'resolved_mapping_count' => $resolvedMappingCount,
+            'dry_run' => $dryRun,
+        ]);
+
         if ($dryRun || $eligible === []) {
             return new CreateTestCasesSummary(
                 total: count($records),
@@ -96,6 +110,13 @@ final class CreateTestCasesService
         $projectId = $this->requiredString($this->options['project_id'] ?? null, 'QAlity project ID');
         $linkType = $this->requiredString($this->options['link_type'] ?? null, 'Jira issue-link type');
         $direction = (string) ($this->options['link_direction'] ?? 'test_to_requirement');
+        Log::info('qality-plus QAlity test-case import started', [
+            'work_item' => $workItemKey,
+            'project_id' => $projectId,
+            'test_case_count' => count($eligible),
+            'request_method' => 'POST',
+            'request_uri' => '/testCases/import',
+        ]);
         $imported = $this->qality->importTestCases($projectId, array_map(
             static fn (array $case): array => [
                 'name' => $case['name'],
@@ -105,6 +126,12 @@ final class CreateTestCasesService
         ));
 
         $success = $imported['success'] ?? null;
+        $errors = $imported['errors'] ?? null;
+        Log::info('qality-plus QAlity test-case import completed', [
+            'work_item' => $workItemKey,
+            'success_count' => is_array($success) ? count($success) : null,
+            'error_count' => is_array($errors) ? count($errors) : null,
+        ]);
 
         if (! is_array($success)) {
             throw new PublisherException('QAlity test-case import response did not contain a success list.');
@@ -141,7 +168,18 @@ final class CreateTestCasesService
             $mappingStore->save($mappings);
         }
 
+        Log::info('qality-plus Jira test-case linking started', [
+            'work_item' => $workItemKey,
+            'test_case_count' => count($createdCases),
+            'link_type' => $linkType,
+            'link_direction' => $direction,
+        ]);
         $linked = $this->linkCases($createdCases, $workItemKey, $linkType, $direction);
+        Log::info('qality-plus Jira test-case linking completed', [
+            'work_item' => $workItemKey,
+            'test_case_count' => count($createdCases),
+            'linked_count' => $linked,
+        ]);
         $this->labelCases($createdCases);
         $errors = $imported['errors'] ?? [];
 
@@ -210,9 +248,19 @@ final class CreateTestCasesService
             throw new PublisherException('A created-test label is configured but the Jira client does not support issue labels.');
         }
 
+        Log::info('qality-plus Jira test-case labeling started', [
+            'label' => $label,
+            'test_case_count' => count($caseKeys),
+        ]);
+
         foreach ($caseKeys as $caseKey) {
             $this->jira->addIssueLabel($caseKey, $label);
         }
+
+        Log::info('qality-plus Jira test-case labeling completed', [
+            'label' => $label,
+            'test_case_count' => count($caseKeys),
+        ]);
     }
 
     /**

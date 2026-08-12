@@ -19,6 +19,7 @@ No unreleased changes.
 - Laravel Boost guidelines and a `qality-plus-development` skill.
 - Class-qualified fallback names for PHPUnit test cases.
 - Configurable labels for newly created Jira test cases.
+- Diagnostic logging for upstream requests, retries, command stages, and test-case import batches.
 
 ### Fixed
 

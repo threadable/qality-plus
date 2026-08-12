@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Threadable\QalityPlus\Console;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 use Threadable\QalityPlus\Publisher\JiraClient;
 use Threadable\QalityPlus\Publisher\JiraTestCaseResolver;
 use Threadable\QalityPlus\Publisher\JsonlResultReader;
@@ -23,9 +24,12 @@ final class PublishQalityResultsCommand extends Command
 
     public function handle(QalityClient $qality, JiraClient $jira): int
     {
+        $stage = 'reading test results';
+
         try {
             $records = (new JsonlResultReader((int) config('qality.results.schema_version', 1)))
                 ->readPath($this->resultsPath());
+            $stage = 'publishing test results';
             $publisher = new QalityPublisher($qality, $jira, [
                 'project_id' => config('qality.qality.project_id'),
                 'cycle_id' => config('qality.qality.cycle_id'),
@@ -44,6 +48,12 @@ final class PublishQalityResultsCommand extends Command
                 (bool) $this->option('dry-run'),
             );
         } catch (PublisherException $exception) {
+            Log::error('qality-plus publish command failed', [
+                'stage' => $stage,
+                'cycle_id' => is_string($this->option('cycle-id')) ? $this->option('cycle-id') : null,
+                'dry_run' => (bool) $this->option('dry-run'),
+                'exception' => $exception,
+            ]);
             $this->components->error($exception->getMessage());
 
             return self::FAILURE;

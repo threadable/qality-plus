@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Threadable\QalityPlus\Console;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 use Threadable\QalityPlus\Publisher\BranchWorkItemResolver;
 use Threadable\QalityPlus\Publisher\CreateTestCasesService;
 use Threadable\QalityPlus\Publisher\GitBranchResolver;
@@ -27,11 +28,15 @@ final class CreateQalityTestCasesCommand extends Command
 
     public function handle(QalityClient $qality, JiraClient $jira): int
     {
+        $workItemKey = null;
+        $stage = 'initializing';
+
         try {
             $workItem = $this->option('work-item');
             $workItemKey = is_string($workItem) && trim($workItem) !== ''
                 ? trim($workItem)
                 : $this->workItemFromBranch();
+            $stage = 'reading test results';
             $records = (new JsonlResultReader((int) config('qality.results.schema_version', 1)))
                 ->readPath($this->resultsPath());
             $mappingFile = $this->mappingFile();
@@ -48,6 +53,7 @@ final class CreateQalityTestCasesCommand extends Command
                     (string) config('qality.jira.test_issue_type', 'QAlity Test'),
                 ),
             );
+            $stage = 'creating and linking test cases';
             $summary = $service->create(
                 $records,
                 $workItemKey,
@@ -55,6 +61,12 @@ final class CreateQalityTestCasesCommand extends Command
                 (bool) $this->option('dry-run'),
             );
         } catch (PublisherException $exception) {
+            Log::error('qality-plus create test cases command failed', [
+                'stage' => $stage,
+                'work_item' => $workItemKey,
+                'dry_run' => (bool) $this->option('dry-run'),
+                'exception' => $exception,
+            ]);
             $this->components->error($exception->getMessage());
 
             return self::FAILURE;

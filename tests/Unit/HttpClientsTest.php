@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Threadable\QalityPlus\Tests\Unit;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Threadable\QalityPlus\Publisher\HttpJiraClient;
 use Threadable\QalityPlus\Publisher\HttpQalityClient;
 use Threadable\QalityPlus\Publisher\PublisherException;
@@ -218,6 +220,7 @@ final class HttpClientsTest extends TestCase
 
     public function test_non_retryable_http_failures_are_not_retried(): void
     {
+        Log::spy();
         Http::fake([
             'https://qality.test/api/testCycles' => Http::response(['error' => 'invalid project'], 422),
         ]);
@@ -228,14 +231,27 @@ final class HttpClientsTest extends TestCase
             $client->createTestCycle('CI run', '20001');
             self::fail('Expected a PublisherException.');
         } catch (PublisherException $exception) {
-            self::assertStringContainsString('HTTP 422', $exception->getMessage());
+            self::assertSame(
+                'QAlity Plus returned HTTP 422 for POST /testCycles after 1 attempt(s): invalid project',
+                $exception->getMessage(),
+            );
         }
 
         Http::assertSentCount(1);
+        Log::shouldHaveReceived('error')->once()->withArgs(static function (string $message, array $context): bool {
+            return $message === 'qality-plus upstream request failed'
+                && $context['upstream'] === 'QAlity Plus'
+                && $context['method'] === 'POST'
+                && $context['uri'] === '/testCycles'
+                && $context['attempt'] === 1
+                && $context['max_attempts'] === 4
+                && $context['status'] === 422;
+        });
     }
 
     public function test_exhausted_transient_failures_raise_an_exception(): void
     {
+        Log::spy();
         Http::fakeSequence()
             ->push(['error' => 'temporary'], 503)
             ->push(['error' => 'temporary'], 503);
@@ -245,11 +261,66 @@ final class HttpClientsTest extends TestCase
         try {
             $client->createTestCycle('CI run', '20001');
             self::fail('Expected a PublisherException.');
-        } catch (PublisherException) {
-            self::assertTrue(true);
+        } catch (PublisherException $exception) {
+            self::assertSame(
+                'QAlity Plus returned HTTP 503 for POST /testCycles after 2 attempt(s): temporary',
+                $exception->getMessage(),
+            );
         }
 
         Http::assertSentCount(2);
+        Log::shouldHaveReceived('warning')->once()->withArgs(static function (string $message, array $context): bool {
+            return $message === 'qality-plus upstream response was retryable; retrying'
+                && $context['upstream'] === 'QAlity Plus'
+                && $context['attempt'] === 1
+                && $context['max_attempts'] === 2
+                && $context['status'] === 503
+                && $context['retry_in_ms'] === 0;
+        });
+        Log::shouldHaveReceived('error')->once()->withArgs(static function (string $message, array $context): bool {
+            return $message === 'qality-plus upstream request failed'
+                && $context['attempt'] === 2
+                && $context['max_attempts'] === 2
+                && $context['status'] === 503;
+        });
+    }
+
+    public function test_connection_failures_include_upstream_and_attempt_details(): void
+    {
+        Log::spy();
+        Http::fake(static function (): never {
+            throw new ConnectionException('Could not resolve host: qality.test');
+        });
+
+        $client = new HttpQalityClient('https://qality.test/api', 'qality-token', retries: 1, retryBackoffMs: 0);
+
+        try {
+            $client->createTestCycle('CI run', '20001');
+            self::fail('Expected a PublisherException.');
+        } catch (PublisherException $exception) {
+            self::assertSame(
+                'Unable to connect to QAlity Plus while calling POST /testCycles after 2 attempt(s).',
+                $exception->getMessage(),
+            );
+        }
+
+        Log::shouldHaveReceived('warning')->once()->withArgs(static function (string $message, array $context): bool {
+            return $message === 'qality-plus upstream connection failed; retrying'
+                && $context['upstream'] === 'QAlity Plus'
+                && $context['attempt'] === 1
+                && $context['max_attempts'] === 2
+                && $context['retry_in_ms'] === 0
+                && $context['exception'] === ConnectionException::class;
+        });
+        Log::shouldHaveReceived('error')->once()->withArgs(static function (string $message, array $context): bool {
+            return $message === 'qality-plus upstream connection failed'
+                && $context['upstream'] === 'QAlity Plus'
+                && $context['method'] === 'POST'
+                && $context['uri'] === '/testCycles'
+                && $context['attempt'] === 2
+                && $context['max_attempts'] === 2
+                && $context['exception'] === ConnectionException::class;
+        });
     }
 
     public function test_jira_rejects_an_invalid_link_direction(): void
