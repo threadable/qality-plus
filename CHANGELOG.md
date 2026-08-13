@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-No unreleased changes.
+### Fixed
+
+- Fall back to namespace-safe Jira name searches for Pest-generated test names.
 
 ## [1.0.0] - 2026-08-11
 

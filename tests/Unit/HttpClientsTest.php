@@ -179,6 +179,40 @@ final class HttpClientsTest extends TestCase
         });
     }
 
+    public function test_jira_falls_back_to_a_namespace_free_search_for_pest_test_names(): void
+    {
+        $name = 'P\\Tests\\Unit\\Support\\Faker\\ValidPhoneNumberProviderTest::__pest_evaluable_facility_factory_can_generate_a_valid_phone_number';
+
+        Http::fakeSequence()
+            ->push(['issues' => []])
+            ->push([
+                'issues' => [
+                    ['key' => 'NDCPR-4677', 'fields' => ['summary' => $name]],
+                ],
+            ]);
+
+        $client = new HttpJiraClient(
+            baseUrl: 'https://jira.test',
+            email: 'ci@example.com',
+            apiToken: 'jira-token',
+            bearerToken: null,
+        );
+
+        self::assertSame(
+            [$name => ['NDCPR-4677']],
+            $client->findTestCaseKeysByNames([$name], 'NDCPR', 'QAlity Test'),
+        );
+
+        Http::assertSentCount(2);
+        Http::assertSent(static function ($request): bool {
+            return $request->data() === [
+                'jql' => 'project = "NDCPR" AND issuetype = "QAlity Test" AND (summary ~ "ValidPhoneNumberProviderTest")',
+                'fields' => ['summary'],
+                'maxResults' => 50,
+            ];
+        });
+    }
+
     public function test_jira_splits_large_name_lookups_into_batches(): void
     {
         Http::fake([
@@ -198,7 +232,7 @@ final class HttpClientsTest extends TestCase
             'QAlity Test',
         );
 
-        Http::assertSentCount(2);
+        Http::assertSentCount(4);
         Http::assertSent(static function ($request): bool {
             $names = substr_count((string) $request->data()['jql'], 'Test ');
 

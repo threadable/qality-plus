@@ -89,27 +89,34 @@ final class HttpJiraClient extends HttpTransport implements JiraBulkTestCaseLook
                 'fields' => ['summary'],
                 'maxResults' => self::NAME_LOOKUP_BATCH_SIZE,
             ]);
-            $issues = $payload['issues'] ?? [];
+            $this->collectExactNameMatches($matches, $payload['issues'] ?? [], $batch);
 
-            if (! is_array($issues)) {
+            $unresolved = array_values(array_filter(
+                $batch,
+                static fn (string $name): bool => ! isset($matches[$name]),
+            ));
+
+            if ($unresolved === []) {
                 continue;
             }
 
-            foreach ($issues as $issue) {
-                if (! is_array($issue)) {
-                    continue;
-                }
+            $fallbackClauses = array_values(array_unique(array_map(
+                fn (string $name): string => 'summary ~ '.$this->jqlString($this->searchTerm($name)),
+                $unresolved,
+            )));
 
-                $summary = $issue['fields']['summary'] ?? null;
-                $key = $issue['key'] ?? null;
+            $fallbackPayload = $this->sendJira('POST', '/rest/api/3/search/jql', [
+                'jql' => sprintf(
+                    'project = %s AND issuetype = %s AND (%s)',
+                    $this->jqlString($projectKey),
+                    $this->jqlString($issueType),
+                    implode(' OR ', $fallbackClauses),
+                ),
+                'fields' => ['summary'],
+                'maxResults' => self::NAME_LOOKUP_BATCH_SIZE,
+            ]);
 
-                if (! is_string($summary) || ! in_array($summary, $batch, true) || ! is_string($key) || trim($key) === '') {
-                    continue;
-                }
-
-                $matches[$summary][] = $key;
-                $matches[$summary] = array_values(array_unique($matches[$summary]));
-            }
+            $this->collectExactNameMatches($matches, $fallbackPayload['issues'] ?? [], $unresolved);
         }
 
         return $matches;
@@ -201,5 +208,53 @@ final class HttpJiraClient extends HttpTransport implements JiraBulkTestCaseLook
     private function jqlString(string $value): string
     {
         return '"'.str_replace(['\\', '"'], ['\\\\', '\\"'], $value).'"';
+    }
+
+    /**
+     * Jira text search is more reliable for a namespace-free fragment than
+     * for a backslash-heavy Pest class and generated method name. The exact
+     * summary comparison still happens locally in this client.
+     */
+    private function searchTerm(string $name): string
+    {
+        $separator = strrpos($name, '::');
+
+        if ($separator === false) {
+            return $name;
+        }
+
+        $class = substr($name, 0, $separator);
+        $namespaceSeparator = strrpos($class, '\\');
+
+        return $namespaceSeparator === false
+            ? $class
+            : substr($class, $namespaceSeparator + 1);
+    }
+
+    /**
+     * @param  array<string, list<string>>  $matches
+     * @param  list<string>  $requestedNames
+     */
+    private function collectExactNameMatches(array &$matches, mixed $issues, array $requestedNames): void
+    {
+        if (! is_array($issues)) {
+            return;
+        }
+
+        foreach ($issues as $issue) {
+            if (! is_array($issue)) {
+                continue;
+            }
+
+            $summary = $issue['fields']['summary'] ?? null;
+            $key = $issue['key'] ?? null;
+
+            if (! is_string($summary) || ! in_array($summary, $requestedNames, true) || ! is_string($key) || trim($key) === '') {
+                continue;
+            }
+
+            $matches[$summary][] = $key;
+            $matches[$summary] = array_values(array_unique($matches[$summary]));
+        }
     }
 }
