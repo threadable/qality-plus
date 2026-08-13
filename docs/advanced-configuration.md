@@ -6,10 +6,10 @@ behavior.
 
 ## Explicit mapping files
 
-Name-based Jira lookup is normally enough, and the mapping file may be absent
-or discarded between pipeline runs. Use an explicit mapping file when a test
-name can change, multiple QAlity cases have the same name, or pipelines must
-avoid Jira searches.
+Automatic Jira identity lookup is normally enough, and the mapping file may be
+absent or discarded between pipeline runs. Use an explicit mapping file when a
+test needs fixed metadata, multiple QAlity cases already share an identity, or
+pipelines must avoid Jira searches.
 
 Register the file in `phpunit.xml`:
 
@@ -54,32 +54,49 @@ does not infer cases from names.
 
 `qality:create-test-cases` writes returned QAlity issue keys to the mapping
 file when the file is writable, but it can resolve cases again through Jira
-name lookup when the file is not present. Existing result files are not
-modified after a mapping is created.
+when the file is not present. Existing result files are not modified after a
+mapping is created.
 
-## Jira name-based lookup
+## Jira test-case lookup
 
-Enable name-based lookup by configuring the Jira project that contains the
-QAlity test cases:
+Enable automatic Jira test-case lookup by configuring the Jira project that
+contains the QAlity test cases:
 
 ```dotenv
 QALITY_JIRA_PROJECT_KEY=QA
 QALITY_JIRA_TEST_ISSUE_TYPE="QAlity Test"
 ```
 
-The package searches within that project and issue type, then compares the
-returned Jira summaries exactly:
+The package derives a label from each result's exact `test.id`:
+
+```text
+qality-auto-<sha256(test.id)>
+```
+
+It searches within the configured project and issue type using that label:
 
 - One match: its issue key is used.
-- No match: `qality:create-test-cases` creates a new case; `qality:publish` skips the result.
+- No match: the package tries the exact Jira summary as a migration fallback.
 - Multiple matches: the command fails instead of selecting an arbitrary case.
+
+If neither lookup finds a case, `qality:create-test-cases` imports one and
+`qality:publish` skips the result. A successful create labels the case with
+the generated identity so the next run does not need the name fallback.
 
 The project key is a Jira project key and is separate from
 `QALITY_PLUS_PROJECT_ID`, which identifies the QAlity project.
 
 Lookups are batched into Jira search requests. The package compares returned
 summaries exactly, so partial JQL matches are ignored. Only tests without a
-matching issue are included in the QAlity Plus import.
+matching label or summary are included in the QAlity Plus import. Newly
+created and resolved cases receive the automatic identity label, while the
+configured `QALITY_JIRA_CREATED_TEST_LABEL` remains an optional additional
+label for newly created cases.
+
+The identity label is based on the emitted framework test ID. A PHPUnit-to-Pest
+migration can change that ID, so the first migrated run may use the exact-name
+fallback to find and label the existing case. The package does not require a
+custom Jira field or an `automation_key`.
 
 The lookup uses the test-case name in this order:
 
@@ -87,7 +104,7 @@ The lookup uses the test-case name in this order:
 2. The test's `class::method` value, including Pest's generated method value
 3. The test name, then its ID when no class and method are available
 
-If an issue key is supplied by an attribute or mapping file, no name lookup is
+If an issue key is supplied by an attribute or mapping file, no lookup is
 performed and the existing QAlity case name is never updated.
 
 The `QalityTestCase` attribute applies to PHPUnit test methods. Pest closure
@@ -160,8 +177,9 @@ QALITY_HTTP_RETRY_BACKOFF_MS=250
 Missing test cases are imported in batches controlled by
 `QALITY_IMPORT_BATCH_SIZE` (50 by default). The mapping file is written after
 each successful batch, so a later batch failure does not discard earlier
-results. In stateless pipelines, Jira name lookup can reconcile those earlier
-results on the next run.
+results. In stateless pipelines, the Jira identity label can reconcile those
+earlier results on the next run; the exact-name fallback handles cases created
+before labels were added.
 
 Upstream request failures are written to the Laravel default log channel with
 the `qality-plus` prefix. The entries include the upstream (`QAlity Plus` or

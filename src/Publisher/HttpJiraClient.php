@@ -7,7 +7,7 @@ namespace Threadable\QalityPlus\Publisher;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 
-final class HttpJiraClient extends HttpTransport implements JiraBulkTestCaseLookup, JiraClient, JiraIssueLabeler, JiraTestCaseLookup
+final class HttpJiraClient extends HttpTransport implements JiraAutomationTestCaseLookup, JiraBulkTestCaseLookup, JiraClient, JiraIssueLabeler, JiraTestCaseLookup
 {
     private const NAME_LOOKUP_BATCH_SIZE = 50;
 
@@ -117,6 +117,60 @@ final class HttpJiraClient extends HttpTransport implements JiraBulkTestCaseLook
             ]);
 
             $this->collectExactNameMatches($matches, $fallbackPayload['issues'] ?? [], $unresolved);
+        }
+
+        return $matches;
+    }
+
+    /**
+     * @param  list<string>  $labels
+     * @return array<string, list<string>>
+     */
+    public function findTestCaseKeysByAutomationLabels(array $labels, string $projectKey, string $issueType): array
+    {
+        $labels = array_values(array_unique(array_filter(
+            array_map(static fn (mixed $label): string => is_string($label) ? trim($label) : '', $labels),
+            static fn (string $label): bool => $label !== '',
+        )));
+        $matches = [];
+
+        foreach (array_chunk($labels, self::NAME_LOOKUP_BATCH_SIZE) as $batch) {
+            $payload = $this->sendJira('POST', '/rest/api/3/search/jql', [
+                'jql' => sprintf(
+                    'project = %s AND issuetype = %s AND labels in (%s)',
+                    $this->jqlString($projectKey),
+                    $this->jqlString($issueType),
+                    implode(', ', array_map(fn (string $label): string => $this->jqlString($label), $batch)),
+                ),
+                'fields' => ['labels'],
+                'maxResults' => self::NAME_LOOKUP_BATCH_SIZE,
+            ]);
+            $issues = $payload['issues'] ?? [];
+
+            if (! is_array($issues)) {
+                continue;
+            }
+
+            foreach ($issues as $issue) {
+                if (! is_array($issue) || ! is_string($issue['key'] ?? null) || trim($issue['key']) === '') {
+                    continue;
+                }
+
+                $issueLabels = $issue['fields']['labels'] ?? [];
+
+                if (! is_array($issueLabels)) {
+                    continue;
+                }
+
+                foreach ($issueLabels as $label) {
+                    if (! is_string($label) || ! in_array($label, $batch, true)) {
+                        continue;
+                    }
+
+                    $matches[$label][] = $issue['key'];
+                    $matches[$label] = array_values(array_unique($matches[$label]));
+                }
+            }
         }
 
         return $matches;

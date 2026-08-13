@@ -43,9 +43,10 @@ QALITY_JIRA_API_TOKEN=...
 QALITY_JIRA_PROJECT_KEY=QA
 ```
 
-The Jira project key is used to find existing QAlity test cases by name. The
-default Jira test issue type is `QAlity Test`; override it with
-`QALITY_JIRA_TEST_ISSUE_TYPE` when necessary.
+The Jira project key is used to find existing QAlity test cases by their
+automatic identity label. Cases created before that label was available are
+recovered through the exact-name fallback. The default Jira test issue type is
+`QAlity Test`; override it with `QALITY_JIRA_TEST_ISSUE_TYPE` when necessary.
 
 For alternative authentication, explicit mappings, data providers, or other
 configuration options, see [Advanced configuration](docs/advanced-configuration.md).
@@ -162,22 +163,34 @@ command stage. Timeout, DNS, and other connection failures are identified
 separately; HTTP failures include the returned status code. Request payloads
 and authentication tokens are not logged.
 
-The mapping file is optional when `QALITY_JIRA_PROJECT_KEY` is configured. The
-create command first looks for an exact Jira test-case name in the configured
-project and creates a new case only when no matching case exists. It also
-reconciles the Jira link for cases found through the mapping file or name
-lookup. The publish command uses the same lookup when a result has no issue
-key. Therefore, a pipeline may discard `.qality-test-map.json` after each run
-when test names are stable and unique; Jira is searched again on the next run.
+The mapping file is optional when `QALITY_JIRA_PROJECT_KEY` is configured. Each
+result gets a deterministic Jira label derived from its exact `test.id`:
+
+```text
+qality-auto-<sha256(test.id)>
+```
+
+The create command looks up that label first, then falls back to an exact Jira
+test-case name for cases created before the label existed. A single match is
+reused and labeled; multiple matches fail instead of selecting an arbitrary
+case. Only tests with no label or name match are sent to the QAlity Plus import
+endpoint. Newly created cases are labeled immediately, and resolved cases are
+also labeled so later runs use the exact lookup.
+
+The publish command uses the same label-first lookup when a result has no issue
+key. Therefore, a pipeline may discard `.qality-test-map.json` after the first
+successful create run; the label remains the stable identity for that emitted
+test ID. If the emitted ID changes, such as during a PHPUnit-to-Pest
+migration, the name fallback can reconcile the existing case once.
 
 Name lookups are sent to Jira in batches, then compared against exact issue
-summaries locally. Only tests with no exact match are sent to the QAlity Plus
-import endpoint.
+summaries locally. They are a migration fallback, not the normal identity
+mechanism.
 
 If `QALITY_JIRA_PROJECT_KEY` is not configured and the mapping file is absent,
 unmapped tests are sent to QAlity Plus for import on every run and may create
 duplicates. Also, `--dry-run` does not call Jira or QAlity, so its eligible
-count does not include name-based lookup results.
+count does not include label or name lookup results.
 
 Branches are expected to use `feature/KEY-123-description`,
 `hotfix/KEY-123-description`, or `bugfix/KEY-123-description`. Use `--branch`
@@ -195,9 +208,10 @@ precedence over `--branch`.
 Store QAlity and Jira credentials as secured CI/CD variables. The package does
 not require a particular CI/CD provider.
 
-Newly created QAlity test cases receive the Jira label
-`threadable-qality-plus` by default. Set `QALITY_JIRA_CREATED_TEST_LABEL=` to
-disable the label.
+Created and resolved QAlity test cases receive their automatic identity label.
+Newly created cases also receive `threadable-qality-plus` by default. Set
+`QALITY_JIRA_CREATED_TEST_LABEL=` to disable that additional label; the
+identity label is always managed by the package.
 
 ## Laravel Boost
 

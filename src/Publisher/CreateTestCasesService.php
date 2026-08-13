@@ -137,6 +137,7 @@ final class CreateTestCasesService
                 'source' => 'existing',
             ]);
             $linked = $this->linkCases($linkCandidates);
+            $this->labelCases($linkCandidates);
             Log::info('qality-plus Jira test-case linking completed', [
                 'work_item' => $workItemKey,
                 'test_case_count' => count($linkCandidates),
@@ -224,7 +225,7 @@ final class CreateTestCasesService
                 'linked_count' => $batchLinked,
                 'source' => 'created',
             ]);
-            $this->labelCases(array_column($batchCreatedCases, 'test_case_key'));
+            $this->labelCases($batchCreatedCases);
 
             if (is_array($batchErrors)) {
                 $errors = array_merge($errors, $batchErrors);
@@ -266,7 +267,7 @@ final class CreateTestCasesService
     }
 
     /**
-     * @param  list<array{test_case_key: string, target_issue_key: string, link_type: string, link_direction: string}>  $candidates
+     * @param  list<array{test_case_key: string, test_id: string, target_issue_key: string, link_type: string, link_direction: string}>  $candidates
      */
     private function linkCases(array $candidates): int
     {
@@ -294,33 +295,41 @@ final class CreateTestCasesService
     }
 
     /**
-     * @param  list<string>  $caseKeys
+     * @param  list<array{test_case_key: string, test_id: string}>  $cases
      */
-    private function labelCases(array $caseKeys): void
+    private function labelCases(array $cases): void
     {
-        $label = $this->options['created_test_label'] ?? null;
-        $label = is_string($label) ? trim($label) : '';
-
-        if ($label === '' || $caseKeys === []) {
+        if ($cases === []) {
             return;
         }
 
         if (! $this->jira instanceof JiraIssueLabeler) {
-            throw new PublisherException('A created-test label is configured but the Jira client does not support issue labels.');
+            throw new PublisherException('The Jira client does not support the labels required for QAlity test-case identity.');
         }
 
+        $createdTestLabel = $this->options['created_test_label'] ?? null;
+        $createdTestLabel = is_string($createdTestLabel) ? trim($createdTestLabel) : '';
+
         Log::info('qality-plus Jira test-case labeling started', [
-            'label' => $label,
-            'test_case_count' => count($caseKeys),
+            'test_case_count' => count($cases),
+            'identity' => true,
+            'created_test_label' => $createdTestLabel !== '',
         ]);
 
-        foreach ($caseKeys as $caseKey) {
-            $this->jira->addIssueLabel($caseKey, $label);
+        foreach ($cases as $case) {
+            $labels = [TestCaseAutomationLabel::forTestId($case['test_id'])];
+
+            if ($createdTestLabel !== '') {
+                $labels[] = $createdTestLabel;
+            }
+
+            foreach (array_unique($labels) as $label) {
+                $this->jira->addIssueLabel($case['test_case_key'], $label);
+            }
         }
 
         Log::info('qality-plus Jira test-case labeling completed', [
-            'label' => $label,
-            'test_case_count' => count($caseKeys),
+            'test_case_count' => count($cases),
         ]);
     }
 
@@ -360,7 +369,7 @@ final class CreateTestCasesService
      * @param  list<array<string, mixed>>  $batch
      * @param  list<mixed>  $success
      * @param  array<string, array{issue_key: string}>  $mappings
-     * @return list<array{test_case_key: string, target_issue_key: string, link_type: string, link_direction: string}>
+     * @return list<array{test_case_key: string, test_id: string, target_issue_key: string, link_type: string, link_direction: string}>
      */
     private function mapImportedCases(array $batch, array $success, array &$mappings): array
     {
@@ -390,6 +399,7 @@ final class CreateTestCasesService
             $mappings[$case['id']] = ['issue_key' => $key];
             $createdCases[] = [
                 'test_case_key' => $key,
+                'test_id' => $case['id'],
                 'target_issue_key' => $case['link_target'],
                 'link_type' => $case['link_type'],
                 'link_direction' => $case['link_direction'],
@@ -423,7 +433,7 @@ final class CreateTestCasesService
 
     /**
      * @param  array<string, mixed>  $record
-     * @return array{test_case_key: string, target_issue_key: string, link_type: string, link_direction: string}
+     * @return array{test_case_key: string, test_id: string, target_issue_key: string, link_type: string, link_direction: string}
      */
     private function linkCandidate(string $testCaseKey, array $record, string $workItemKey): array
     {
@@ -431,6 +441,7 @@ final class CreateTestCasesService
 
         return [
             'test_case_key' => $testCaseKey,
+            'test_id' => $record['test']['id'],
             'target_issue_key' => $fields['link_target'],
             'link_type' => $fields['link_type'],
             'link_direction' => $fields['link_direction'],

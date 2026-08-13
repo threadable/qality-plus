@@ -213,6 +213,40 @@ final class HttpClientsTest extends TestCase
         });
     }
 
+    public function test_jira_finds_test_cases_by_exact_automation_labels(): void
+    {
+        Http::fake([
+            'https://jira.test/rest/api/3/search/jql' => Http::response([
+                'issues' => [
+                    [
+                        'key' => 'NDCPR-4677',
+                        'fields' => ['labels' => ['qality-auto-abc123']],
+                    ],
+                ],
+            ]),
+        ]);
+
+        $client = new HttpJiraClient(
+            baseUrl: 'https://jira.test',
+            email: 'ci@example.com',
+            apiToken: 'jira-token',
+            bearerToken: null,
+        );
+
+        self::assertSame(
+            ['qality-auto-abc123' => ['NDCPR-4677']],
+            $client->findTestCaseKeysByAutomationLabels(['qality-auto-abc123'], 'NDCPR', 'QAlity Test'),
+        );
+
+        Http::assertSent(static function ($request): bool {
+            return $request->data() === [
+                'jql' => 'project = "NDCPR" AND issuetype = "QAlity Test" AND labels in ("qality-auto-abc123")',
+                'fields' => ['labels'],
+                'maxResults' => 50,
+            ];
+        });
+    }
+
     public function test_jira_splits_large_name_lookups_into_batches(): void
     {
         Http::fake([

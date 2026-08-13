@@ -92,7 +92,7 @@ final class CommandsTest extends TestCase
             ->expectsOutputToContain('Processed 1 eligible test case(s) for PROJ-123; 1 created, 1 linked, 0 skipped.')
             ->assertExitCode(0);
 
-        Http::assertSentCount(4);
+        Http::assertSentCount(5);
         Http::assertSent(static fn ($request): bool => $request->method() === 'PUT'
             && $request->url() === 'https://jira.test/rest/api/3/issue/QA-123'
             && $request->data() === [
@@ -204,7 +204,7 @@ final class CommandsTest extends TestCase
             ->expectsOutputToContain('Published 1 result(s); 1 published, 0 skipped, 0 Jira link(s) in cycle cycle-1.')
             ->assertExitCode(0);
 
-        Http::assertSentCount(6);
+        Http::assertSentCount(7);
     }
 
     /**

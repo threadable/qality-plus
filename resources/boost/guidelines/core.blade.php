@@ -32,6 +32,12 @@ Register the PHPUnit extension in `phpunit.xml`:
 
 The default results directory is `storage/qality`.
 
+Each result is assigned a deterministic Jira identity label derived from its
+exact `test.id` (`qality-auto-<sha256(test.id)>`). The package looks up that
+label before using its exact-name migration fallback, and labels newly created
+or resolved cases automatically. No custom Jira field or user-supplied
+`automation_key` is required.
+
 ### Map tests
 
 `QalityTestCase` is a PHP method attribute for PHPUnit tests. Pest tests use

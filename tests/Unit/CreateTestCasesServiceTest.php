@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Threadable\QalityPlus\Tests\Unit;
 
 use Threadable\QalityPlus\Publisher\CreateTestCasesService;
+use Threadable\QalityPlus\Publisher\JiraAutomationTestCaseLookup;
 use Threadable\QalityPlus\Publisher\JiraBulkTestCaseLookup;
 use Threadable\QalityPlus\Publisher\JiraClient;
 use Threadable\QalityPlus\Publisher\JiraIssueLabeler;
 use Threadable\QalityPlus\Publisher\JiraTestCaseLookup;
 use Threadable\QalityPlus\Publisher\JiraTestCaseResolver;
 use Threadable\QalityPlus\Publisher\QalityClient;
+use Threadable\QalityPlus\Publisher\TestCaseAutomationLabel;
 use Threadable\QalityPlus\Tests\TestCase;
 
 final class CreateTestCasesServiceTest extends TestCase
@@ -176,7 +178,10 @@ final class CreateTestCasesServiceTest extends TestCase
             'qality' => null,
         ]], 'PROJ-123', $path);
 
-        self::assertSame([['QA-123', 'threadable-qality-plus']], $jira->addedLabels);
+        self::assertSame([
+            ['QA-123', TestCaseAutomationLabel::forTestId('CheckoutTest::test_checkout')],
+            ['QA-123', 'threadable-qality-plus'],
+        ], $jira->addedLabels);
     }
 
     public function test_it_does_not_label_created_cases_when_the_label_is_empty(): void
@@ -195,7 +200,40 @@ final class CreateTestCasesServiceTest extends TestCase
             'qality' => null,
         ]], 'PROJ-123', $path);
 
-        self::assertSame([], $jira->addedLabels);
+        self::assertSame([
+            ['QA-123', TestCaseAutomationLabel::forTestId('CheckoutTest::test_checkout')],
+        ], $jira->addedLabels);
+    }
+
+    public function test_it_resolves_an_existing_case_by_automation_label_before_name(): void
+    {
+        $path = $this->temporaryMappingPath();
+        $testId = 'P\\Tests\\Unit\\Support\\Faker\\ValidPhoneNumberProviderTest::__pest_evaluable_facility_factory_can_generate_a_valid_phone_number';
+        $label = TestCaseAutomationLabel::forTestId($testId);
+        $qality = new CreateFakeQalityClient;
+        $jira = new CreateFakeJiraClient;
+        $jira->testCaseKeysByAutomationLabel[$label] = ['NDCPR-4677'];
+        $service = new CreateTestCasesService(
+            $qality,
+            $jira,
+            [
+                'project_id' => '20001',
+                'link_type' => 'Tests',
+            ],
+            new JiraTestCaseResolver($jira, 'NDCPR', 'QAlity Test'),
+        );
+
+        $summary = $service->create([[
+            'test' => ['id' => $testId, 'name' => '__pest_evaluable_facility_factory_can_generate_a_valid_phone_number'],
+            'qality' => null,
+        ]], 'NDCPR-562', $path);
+
+        self::assertSame(0, $summary->eligible);
+        self::assertSame(1, $summary->skipped);
+        self::assertSame(0, $qality->importCalls);
+        self::assertSame([
+            ['NDCPR-4677', $label],
+        ], $jira->addedLabels);
     }
 
     public function test_it_resolves_an_existing_case_by_name_and_persists_the_mapping(): void
@@ -383,13 +421,16 @@ final class CreateFakeQalityClient implements QalityClient
     }
 }
 
-final class CreateFakeJiraClient implements JiraBulkTestCaseLookup, JiraClient, JiraIssueLabeler, JiraTestCaseLookup
+final class CreateFakeJiraClient implements JiraAutomationTestCaseLookup, JiraBulkTestCaseLookup, JiraClient, JiraIssueLabeler, JiraTestCaseLookup
 {
     /** @var list<list<string>> */
     public array $createdLinks = [];
 
     /** @var array<string, list<string>> */
     public array $testCaseKeysByName = [];
+
+    /** @var array<string, list<string>> */
+    public array $testCaseKeysByAutomationLabel = [];
 
     public int $bulkLookupCalls = 0;
 
@@ -407,6 +448,23 @@ final class CreateFakeJiraClient implements JiraBulkTestCaseLookup, JiraClient, 
     public function findTestCaseKeysByName(string $name, string $projectKey, string $issueType): array
     {
         return $this->testCaseKeysByName[$name] ?? [];
+    }
+
+    /**
+     * @param  list<string>  $labels
+     * @return array<string, list<string>>
+     */
+    public function findTestCaseKeysByAutomationLabels(array $labels, string $projectKey, string $issueType): array
+    {
+        $matches = [];
+
+        foreach ($labels as $label) {
+            if (isset($this->testCaseKeysByAutomationLabel[$label])) {
+                $matches[$label] = $this->testCaseKeysByAutomationLabel[$label];
+            }
+        }
+
+        return $matches;
     }
 
     /**
