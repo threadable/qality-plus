@@ -9,10 +9,6 @@ them to QAlity Plus and Jira from your CI/CD pipeline.
 composer require threadable/qality-plus
 ```
 
-If your organization distributes the package through Private Packagist, see
-[Private Packagist setup](docs/private-packagist.md) before running this
-command.
-
 The package is auto-discovered by Laravel. Publish the configuration only when
 you need to change a default:
 
@@ -56,6 +52,25 @@ configuration options, see [Advanced configuration](docs/advanced-configuration.
 
 ## Map tests to QAlity
 
+`QalityTestCase` is a PHP method attribute for PHPUnit tests. Pest tests use
+closure syntax and are exposed to PHPUnit as generated test methods, so use an
+explicit mapping file to attach issue and requirement metadata to them. The
+mapping key must be the exact `test.id` written to the QAlity JSONL result; for
+example:
+
+```json
+{
+    "P\\Tests\\Unit\\Commands\\CleanTsmLogTest::__pest_evaluable_command": {
+        "issue_key": "QA-123",
+        "requirement_issue_key": "REQ-42"
+    }
+}
+```
+
+The generated Pest `class::method` value can vary with the test and project
+namespace. Use the `test.id` from the result rather than the source filename
+or source test description.
+
 To use an existing QAlity test case, put the attribute on the individual test
 method:
 
@@ -82,8 +97,8 @@ public function test_checkout_can_be_completed(): void
 }
 ```
 
-If only a requirement is supplied, the fully qualified PHPUnit class and
-method name or Pest description is used as the QAlity test-case name:
+If only a requirement is supplied on a PHPUnit test, the fully qualified class
+and method name is used as the QAlity test-case name:
 
 ```php
 #[QalityTestCase(requirementIssueKey: 'NDC-123')]
@@ -93,9 +108,12 @@ public function test_user_can_reset_their_password(): void
 }
 ```
 
-When no name is provided, the package uses the fully qualified PHPUnit class
-and method name, or the Pest test description. If an issue key is already
-available, the case is treated as existing and its name is not changed.
+When no name is provided, the package uses an explicit name first, then the
+test's `class::method` value when one is available, and finally the test name or
+ID. For Pest tests, this means the generated PHPUnit `class::method` value is
+normally used; the Pest source description is not a dedicated fallback. If an
+issue key is already available, the case is treated as existing and its name
+is not changed.
 
 `requirementIssueKey` is the source of truth for the Jira issue linked to that
 test. It overrides the `--work-item` value. When it is omitted, the branch

@@ -21,12 +21,19 @@ The file uses the PHPUnit test ID as its key:
 
 ```json
 {
-    "Pest\\Tests\\Feature\\CheckoutTest::it_can_checkout": {
+    "P\\Tests\\Feature\\CheckoutTest::__pest_evaluable_it_can_checkout": {
         "issue_key": "QA-123",
         "requirement_issue_key": "REQ-42"
     }
 }
 ```
+
+Pest tests are exposed to PHPUnit as generated test methods. Their mapping key
+must therefore be the exact `test.id` written to the QAlity JSONL result, such
+as `P\\Tests\\Feature\\CheckoutTest::__pest_evaluable_it_can_checkout` in
+the example above. The generated namespace and method depend on the project
+and Pest version; do not derive the key from the source filename or Pest
+description.
 
 Data-provider tests may be mapped using the full generated ID or the base
 `Class::method` ID:
@@ -77,11 +84,16 @@ matching issue are included in the QAlity Plus import.
 The lookup uses the test-case name in this order:
 
 1. `QalityTestCase(name: '...')`
-2. Fully qualified PHPUnit class and method name
-3. Pest test description
+2. The test's `class::method` value, including Pest's generated method value
+3. The test name, then its ID when no class and method are available
 
 If an issue key is supplied by an attribute or mapping file, no name lookup is
 performed and the existing QAlity case name is never updated.
+
+The `QalityTestCase` attribute applies to PHPUnit test methods. Pest closure
+tests cannot carry this attribute directly; use the explicit mapping file for
+their issue, requirement, and link metadata. A custom `name` is currently
+available through the PHPUnit attribute, not through a Pest mapping entry.
 
 For `qality:create-test-cases`, the link target is resolved per test. An
 attribute `requirementIssueKey` takes precedence over the `--work-item` or

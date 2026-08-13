@@ -25,7 +25,4 @@ No unreleased changes.
 - Batched Jira name lookups before importing or publishing test cases.
 - Batched QAlity test-case imports and persisted mappings after each successful batch.
 - Added connection-failure classification, response status codes, durations, and rate-limit details to diagnostics.
-
-### Fixed
-
-- Support the Private Packagist username required by user and organization tokens.
+- Clarified Pest test metadata mapping and generated `class::method` test-case names in the documentation.
