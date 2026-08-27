@@ -25,6 +25,8 @@ final class JiraTestCaseResolver
             return null;
         }
 
+        $this->verifyAccess();
+
         $label = $this->automationLabel($record);
 
         if ($label !== null && $this->jira instanceof JiraAutomationTestCaseLookup) {
@@ -64,6 +66,8 @@ final class JiraTestCaseResolver
         if (! $this->canLookup()) {
             return [];
         }
+
+        $this->verifyAccess();
 
         $labelsByRecord = [];
         $labels = [];
@@ -187,6 +191,13 @@ final class JiraTestCaseResolver
         return $this->projectKey !== null
             && trim($this->projectKey) !== ''
             && ($this->jira instanceof JiraAutomationTestCaseLookup || $this->jira instanceof JiraTestCaseLookup);
+    }
+
+    private function verifyAccess(): void
+    {
+        if ($this->jira instanceof JiraAccessVerifier) {
+            $this->jira->verifyAccess((string) $this->projectKey);
+        }
     }
 
     /**

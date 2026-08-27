@@ -179,6 +179,8 @@ final class CommandsTest extends TestCase
             'qality.jira.project_key' => 'QA',
         ]);
         Http::fake([
+            'https://jira.test/rest/api/3/myself' => Http::response(['accountId' => 'account-1']),
+            'https://jira.test/rest/api/3/project/QA' => Http::response(['key' => 'QA']),
             'https://jira.test/rest/api/3/search/jql' => Http::response([
                 'issues' => [['key' => 'QA-123', 'fields' => ['summary' => 'test_checkout']]],
             ]),
@@ -204,7 +206,7 @@ final class CommandsTest extends TestCase
             ->expectsOutputToContain('Published 1 result(s); 1 published, 0 skipped, 0 Jira link(s) in cycle cycle-1.')
             ->assertExitCode(0);
 
-        Http::assertSentCount(7);
+        Http::assertSentCount(9);
     }
 
     /**

@@ -183,6 +183,12 @@ successful create run; the label remains the stable identity for that emitted
 test ID. If the emitted ID changes, such as during a PHPUnit-to-Pest
 migration, the name fallback can reconcile the existing case once.
 
+Before performing a Jira lookup, the package verifies the configured Jira
+credentials with `/rest/api/3/myself` and verifies access to the configured
+project with `/rest/api/3/project/{projectKey}`. A failed check stops the
+command before any QAlity test-case import, so an authentication or project
+permission problem is not treated as an empty lookup result.
+
 Name lookups are sent to Jira in batches, then compared against exact issue
 summaries locally. They are a migration fallback, not the normal identity
 mechanism.

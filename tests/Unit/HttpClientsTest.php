@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Threadable\QalityPlus\Publisher\HttpJiraClient;
 use Threadable\QalityPlus\Publisher\HttpQalityClient;
+use Threadable\QalityPlus\Publisher\JiraTestCaseResolver;
 use Threadable\QalityPlus\Publisher\PublisherException;
 use Threadable\QalityPlus\Tests\TestCase;
 
@@ -348,6 +349,77 @@ final class HttpClientsTest extends TestCase
         $this->expectException(PublisherException::class);
 
         (new HttpJiraClient('https://jira.test', null, null, null))->issue('QA-123');
+    }
+
+    public function test_jira_verifies_authentication_and_project_access(): void
+    {
+        Http::fake([
+            'https://jira.test/rest/api/3/myself' => Http::response(['accountId' => 'account-1']),
+            'https://jira.test/rest/api/3/project/URB' => Http::response(['key' => 'URB']),
+        ]);
+
+        $client = new HttpJiraClient(
+            baseUrl: 'https://jira.test',
+            email: 'ci@example.com',
+            apiToken: 'jira-token',
+            bearerToken: null,
+        );
+
+        $client->verifyAccess('URB');
+
+        Http::assertSentCount(2);
+        Http::assertSent(static function ($request): bool {
+            return in_array($request->url(), [
+                'https://jira.test/rest/api/3/myself',
+                'https://jira.test/rest/api/3/project/URB',
+            ], true)
+                && $request->header('Authorization') === ['Basic '.base64_encode('ci@example.com:jira-token')];
+        });
+    }
+
+    public function test_jira_authentication_is_checked_before_automation_label_search(): void
+    {
+        Http::fake([
+            'https://jira.test/rest/api/3/myself' => Http::response(['message' => 'Unauthorized'], 401),
+            'https://jira.test/rest/api/3/search/jql' => Http::response(['issues' => []]),
+        ]);
+
+        $client = new HttpJiraClient(
+            baseUrl: 'https://jira.test',
+            email: 'ci@example.com',
+            apiToken: 'invalid-token',
+            bearerToken: null,
+        );
+
+        try {
+            (new JiraTestCaseResolver($client, 'URB', 'QAlity Test'))->resolveMany([[
+                'test' => ['id' => 'CheckoutTest::test_checkout'],
+            ]]);
+            self::fail('Expected Jira authentication to fail.');
+        } catch (PublisherException $exception) {
+            self::assertStringContainsString('Jira authentication check failed: Jira returned HTTP 401', $exception->getMessage());
+        }
+
+        Http::assertSentCount(1);
+    }
+
+    public function test_jira_fails_when_the_configured_project_is_not_accessible(): void
+    {
+        Http::fake([
+            'https://jira.test/rest/api/3/myself' => Http::response(['accountId' => 'account-1']),
+            'https://jira.test/rest/api/3/project/URB' => Http::response(['message' => 'Project not found'], 404),
+        ]);
+
+        $client = new HttpJiraClient(
+            baseUrl: 'https://jira.test',
+            email: 'ci@example.com',
+            apiToken: 'jira-token',
+            bearerToken: null,
+        );
+
+        $this->expectExceptionMessageMatches('/Jira project access check failed for \[URB\]: Jira returned HTTP 404/');
+
+        $client->verifyAccess('URB');
     }
 
     public function test_non_retryable_http_failures_are_not_retried(): void

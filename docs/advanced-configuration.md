@@ -107,6 +107,13 @@ The lookup uses the test-case name in this order:
 If an issue key is supplied by an attribute or mapping file, no lookup is
 performed and the existing QAlity case name is never updated.
 
+Before lookup, the package checks the Jira credentials with
+`/rest/api/3/myself` and checks Browse Projects access to the configured Jira
+project with `/rest/api/3/project/{projectKey}`. These checks run once per
+command invocation before any lookup or QAlity import. A failed authentication
+or project-access check fails the command instead of being interpreted as an
+empty search result.
+
 The `QalityTestCase` attribute applies to PHPUnit test methods. Pest closure
 tests cannot carry this attribute directly; use the explicit mapping file for
 their issue, requirement, and link metadata. A custom `name` is currently

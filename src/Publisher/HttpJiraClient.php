@@ -7,7 +7,7 @@ namespace Threadable\QalityPlus\Publisher;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 
-final class HttpJiraClient extends HttpTransport implements JiraAutomationTestCaseLookup, JiraBulkTestCaseLookup, JiraClient, JiraIssueLabeler, JiraTestCaseLookup
+final class HttpJiraClient extends HttpTransport implements JiraAccessVerifier, JiraAutomationTestCaseLookup, JiraBulkTestCaseLookup, JiraClient, JiraIssueLabeler, JiraTestCaseLookup
 {
     private const NAME_LOOKUP_BATCH_SIZE = 50;
 
@@ -26,6 +26,27 @@ final class HttpJiraClient extends HttpTransport implements JiraAutomationTestCa
     public function issue(string $issueKey): array
     {
         return $this->sendJira('GET', '/rest/api/3/issue/'.rawurlencode($issueKey).'?fields=issuelinks,project,issuetype');
+    }
+
+    public function verifyAccess(string $projectKey): void
+    {
+        try {
+            $this->sendJira('GET', '/rest/api/3/myself');
+        } catch (PublisherException $exception) {
+            throw new PublisherException(
+                'Jira authentication check failed: '.$exception->getMessage(),
+                previous: $exception,
+            );
+        }
+
+        try {
+            $this->sendJira('GET', '/rest/api/3/project/'.rawurlencode($projectKey));
+        } catch (PublisherException $exception) {
+            throw new PublisherException(
+                sprintf('Jira project access check failed for [%s]: %s', $projectKey, $exception->getMessage()),
+                previous: $exception,
+            );
+        }
     }
 
     /**
