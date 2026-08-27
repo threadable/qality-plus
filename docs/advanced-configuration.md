@@ -22,8 +22,7 @@ The file uses the PHPUnit test ID as its key:
 ```json
 {
     "P\\Tests\\Feature\\CheckoutTest::__pest_evaluable_it_can_checkout": {
-        "issue_key": "QA-123",
-        "requirement_issue_key": "REQ-42"
+        "issue_key": "QA-123"
     }
 }
 ```
@@ -51,6 +50,12 @@ Data-provider tests may be mapped using the full generated ID or the base
 
 The exact ID takes precedence over the base method ID. The mapping file itself
 does not infer cases from names.
+
+Each mapping entry must contain a non-empty `issue_key`. For
+`qality:create-test-cases`, a mapped test is assumed to already exist and be
+linked. It is excluded from Jira lookup, linking, labeling, and QAlity import.
+The mapped issue key is therefore trusted as the source of truth; remove or
+update the entry when the case or its links need to be changed.
 
 `qality:create-test-cases` writes returned QAlity issue keys to the mapping
 file when the file is writable, but it can resolve cases again through Jira
@@ -115,16 +120,17 @@ or project-access check fails the command instead of being interpreted as an
 empty search result.
 
 The `QalityTestCase` attribute applies to PHPUnit test methods. Pest closure
-tests cannot carry this attribute directly; use the explicit mapping file for
-their issue, requirement, and link metadata. A custom `name` is currently
+tests cannot carry this attribute directly; use the explicit mapping file to
+map their generated test IDs to existing QAlity issue keys. Mapped cases are
+assumed to already have their required links. A custom `name` is currently
 available through the PHPUnit attribute, not through a Pest mapping entry.
 
-For `qality:create-test-cases`, the link target is resolved per test. An
-attribute `requirementIssueKey` takes precedence over the `--work-item` or
-branch work item. If no requirement is annotated, the work item is used as the
-fallback. This applies to newly imported cases and existing cases resolved
-from Jira or a mapping file; existing cases are not imported again, but their
-expected link is reconciled.
+For `qality:create-test-cases`, the link target is resolved per test for newly
+imported cases and cases resolved from Jira. An attribute
+`requirementIssueKey` takes precedence over the `--work-item` or branch work
+item. If no requirement is annotated, the work item is used as the fallback.
+Cases supplied by the mapping file are assumed to already have their expected
+link and are not reconciled.
 
 The attribute can also override the global link settings for one test:
 

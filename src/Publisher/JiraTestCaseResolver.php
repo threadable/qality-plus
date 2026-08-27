@@ -58,7 +58,7 @@ final class JiraTestCaseResolver
      * Resolve all records with one or more batched Jira searches when supported
      * by the client. The returned keys use the record's array index.
      *
-     * @param  list<array<string, mixed>>  $records
+     * @param  array<int, array<string, mixed>>  $records
      * @return array<int, string>
      */
     public function resolveMany(array $records): array

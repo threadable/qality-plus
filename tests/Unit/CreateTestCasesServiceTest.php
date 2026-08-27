@@ -70,7 +70,7 @@ final class CreateTestCasesServiceTest extends TestCase
         self::assertSame(['issue_key' => 'QA-123'], json_decode((string) file_get_contents($path), true)['CheckoutTest::test_checkout']);
     }
 
-    public function test_it_relinks_cases_already_persisted_in_the_mapping_file(): void
+    public function test_it_treats_cases_in_the_mapping_file_as_existing_and_linked(): void
     {
         $path = $this->temporaryMappingPath();
         file_put_contents($path, json_encode([
@@ -91,7 +91,8 @@ final class CreateTestCasesServiceTest extends TestCase
         self::assertSame(0, $summary->eligible);
         self::assertSame(1, $summary->skipped);
         self::assertSame([], $qality->importPayload);
-        self::assertSame([['QA-123', 'PROJ-123', 'Tests', 'test_to_requirement']], $jira->createdLinks);
+        self::assertSame([], $jira->createdLinks);
+        self::assertSame([], $jira->addedLabels);
     }
 
     public function test_it_uses_an_attribute_name_when_creating_a_missing_case(): void
@@ -234,6 +235,41 @@ final class CreateTestCasesServiceTest extends TestCase
         self::assertSame([
             ['NDCPR-4677', $label],
         ], $jira->addedLabels);
+    }
+
+    public function test_it_does_not_lookup_or_link_cases_in_the_mapping_file(): void
+    {
+        $path = $this->temporaryMappingPath();
+        $testId = 'CheckoutTest::test_checkout';
+        file_put_contents($path, json_encode([
+            $testId => ['issue_key' => 'QA-123'],
+        ], JSON_THROW_ON_ERROR));
+
+        $qality = new CreateFakeQalityClient;
+        $jira = new CreateFakeJiraClient;
+        $jira->testCaseKeysByAutomationLabel[TestCaseAutomationLabel::forTestId($testId)] = ['QA-456', 'QA-789'];
+        $service = new CreateTestCasesService(
+            $qality,
+            $jira,
+            [
+                'project_id' => '20001',
+                'link_type' => 'Tests',
+            ],
+            new JiraTestCaseResolver($jira, 'QA', 'QAlity Test'),
+        );
+
+        $summary = $service->create([[
+            'test' => ['id' => $testId, 'name' => 'test_checkout'],
+            'qality' => null,
+        ]], 'PROJ-123', $path);
+
+        self::assertSame(0, $summary->eligible);
+        self::assertSame(1, $summary->skipped);
+        self::assertSame(0, $qality->importCalls);
+        self::assertSame([], $jira->createdLinks);
+        self::assertSame([], $jira->addedLabels);
+        self::assertSame(0, $jira->automationLookupCalls);
+        self::assertSame(0, $jira->bulkLookupCalls);
     }
 
     public function test_it_resolves_an_existing_case_by_name_and_persists_the_mapping(): void
@@ -434,6 +470,8 @@ final class CreateFakeJiraClient implements JiraAutomationTestCaseLookup, JiraBu
 
     public int $bulkLookupCalls = 0;
 
+    public int $automationLookupCalls = 0;
+
     /** @var list<list<string>> */
     public array $bulkLookupNames = [];
 
@@ -456,6 +494,7 @@ final class CreateFakeJiraClient implements JiraAutomationTestCaseLookup, JiraBu
      */
     public function findTestCaseKeysByAutomationLabels(array $labels, string $projectKey, string $issueType): array
     {
+        $this->automationLookupCalls++;
         $matches = [];
 
         foreach ($labels as $label) {

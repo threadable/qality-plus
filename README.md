@@ -55,15 +55,15 @@ configuration options, see [Advanced configuration](docs/advanced-configuration.
 
 `QalityTestCase` is a PHP method attribute for PHPUnit tests. Pest tests use
 closure syntax and are exposed to PHPUnit as generated test methods, so use an
-explicit mapping file to attach issue and requirement metadata to them. The
-mapping key must be the exact `test.id` written to the QAlity JSONL result; for
-example:
+explicit mapping file to assign their existing QAlity test-case issue keys. A
+mapping is treated as the source of truth: the case is assumed to exist and
+already be linked. The mapping key must be the exact `test.id` written to the
+QAlity JSONL result; for example:
 
 ```json
 {
     "P\\Tests\\Unit\\Commands\\CleanTsmLogTest::__pest_evaluable_command": {
-        "issue_key": "QA-123",
-        "requirement_issue_key": "REQ-42"
+        "issue_key": "QA-123"
     }
 }
 ```
@@ -176,6 +176,10 @@ reused and labeled; multiple matches fail instead of selecting an arbitrary
 case. Only tests with no label or name match are sent to the QAlity Plus import
 endpoint. Newly created cases are labeled immediately, and resolved cases are
 also labeled so later runs use the exact lookup.
+
+Tests with an existing mapping are excluded from this process. They do not
+trigger Jira lookup, linking, labeling, or QAlity import; their mapped issue
+keys are assumed to be valid and already linked.
 
 The publish command uses the same label-first lookup when a result has no issue
 key. Therefore, a pipeline may discard `.qality-test-map.json` after the first

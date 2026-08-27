@@ -35,8 +35,22 @@ final class CreateTestCasesService
         $skipped = 0;
         $resolvedMappings = false;
         $resolvedMappingCount = 0;
-        $resolvedIssueKeys = ! $dryRun && $this->testCaseResolver !== null
-            ? $this->testCaseResolver->resolveMany($records)
+        $recordsToResolve = [];
+
+        foreach ($records as $recordIndex => $record) {
+            $test = $record['test'] ?? null;
+
+            if (! is_array($test) || ! is_string($test['id'] ?? null) || trim($test['id']) === '') {
+                throw new PublisherException('Each QAlity result must contain a non-empty test ID.');
+            }
+
+            if (! isset($mappings[$test['id']])) {
+                $recordsToResolve[$recordIndex] = $record;
+            }
+        }
+
+        $resolvedIssueKeys = ! $dryRun && $this->testCaseResolver !== null && $recordsToResolve !== []
+            ? $this->testCaseResolver->resolveMany($recordsToResolve)
             : [];
 
         foreach ($records as $recordIndex => $record) {
@@ -54,24 +68,20 @@ final class CreateTestCasesService
 
             $seen[$testId] = true;
 
+            if (isset($mappings[$testId])) {
+                // A mapping is the explicit source of truth. It represents a
+                // case that already exists and has already been linked.
+                $skipped++;
+
+                continue;
+            }
+
             if ($this->hasIssueKey($record)) {
                 $linkCandidates[] = $this->linkCandidate(
                     (string) $record['qality']['issue_key'],
                     $record,
                     $workItemKey,
                 );
-                $skipped++;
-
-                continue;
-            }
-
-            if (isset($mappings[$testId])) {
-                $issueKey = $mappings[$testId]['issue_key'] ?? null;
-
-                if (is_string($issueKey) && trim($issueKey) !== '') {
-                    $linkCandidates[] = $this->linkCandidate($issueKey, $record, $workItemKey);
-                }
-
                 $skipped++;
 
                 continue;
