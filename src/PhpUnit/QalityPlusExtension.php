@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Threadable\QalityPlus\PhpUnit;
 
+use PHPUnit\Event\EventFacadeIsSealedException;
 use PHPUnit\Runner\Extension\Extension;
 use PHPUnit\Runner\Extension\Facade;
 use PHPUnit\Runner\Extension\ParameterCollection;
@@ -42,16 +43,22 @@ final class QalityPlusExtension implements Extension
                 new TestMetadataResolver($mappingFile),
             );
 
-            $facade->registerSubscribers(
-                new PreparationStartedResultSubscriber($collector),
-                new PassedResultSubscriber($collector),
-                new FailedResultSubscriber($collector),
-                new ErroredResultSubscriber($collector),
-                new SkippedResultSubscriber($collector),
-                new IncompleteResultSubscriber($collector),
-                new RiskyResultSubscriber($collector),
-                new FinishedResultSubscriber($collector),
-            );
+            try {
+                $facade->registerSubscribers(
+                    new PreparationStartedResultSubscriber($collector),
+                    new PassedResultSubscriber($collector),
+                    new FailedResultSubscriber($collector),
+                    new ErroredResultSubscriber($collector),
+                    new SkippedResultSubscriber($collector),
+                    new IncompleteResultSubscriber($collector),
+                    new RiskyResultSubscriber($collector),
+                    new FinishedResultSubscriber($collector),
+                );
+            } catch (EventFacadeIsSealedException) {
+                // Pest seals the controller's facade before loading its parallel suite.
+                // The actual ParaTest workers bootstrap the extension separately.
+                return;
+            }
         } catch (Throwable $exception) {
             ExtensionDiagnostics::report('bootstrap', $exception, $context);
 

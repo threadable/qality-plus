@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Fall back to namespace-safe Jira name searches for Pest-generated test names.
 - Resolve test cases by deterministic Jira labels derived from result test IDs.
+- Ignore PHPUnit event-facade sealing during Pest/ParaTest controller bootstraps.
 
 ## [1.0.3] - 2026-09-08
 
