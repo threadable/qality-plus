@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Fall back to namespace-safe Jira name searches for Pest-generated test names.
 - Resolve test cases by deterministic Jira labels derived from result test IDs.
+- Report PHPUnit extension bootstrap and result-recording failures to stderr.
 
 ## [1.0.0] - 2026-08-11
 

@@ -71,6 +71,109 @@ XML;
         }
     }
 
+    public function test_bootstrap_errors_are_visible_in_process_diagnostics(): void
+    {
+        $root = dirname(__DIR__, 2);
+        $directory = sys_get_temp_dir().DIRECTORY_SEPARATOR.'qality-extension-bootstrap-'.bin2hex(random_bytes(4));
+        $configuration = $directory.'.xml';
+        $mappingFile = $directory.'.json';
+        $xml = <<<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit bootstrap="%s" colors="false">
+    <testsuites>
+        <testsuite name="extension-diagnostics">
+            <file>%s</file>
+        </testsuite>
+    </testsuites>
+    <extensions>
+        <bootstrap class="Threadable\QalityPlus\PhpUnit\QalityPlusExtension">
+            <parameter name="directory" value="%s"/>
+            <parameter name="mapping_file" value="%s"/>
+        </bootstrap>
+    </extensions>
+</phpunit>
+XML;
+        $xml = sprintf(
+            $xml,
+            $this->xmlPath($root.'/vendor/autoload.php'),
+            $this->xmlPath(__DIR__.'/../Fixtures/ExtensionFixtureTest.php'),
+            $this->xmlPath($directory),
+            $this->xmlPath($mappingFile),
+        );
+        file_put_contents($configuration, $xml);
+
+        try {
+            $process = new Process([
+                PHP_BINARY,
+                $root.'/vendor/bin/phpunit',
+                '--configuration',
+                $configuration,
+            ], $root);
+            $process->run();
+
+            $diagnostics = $process->getOutput().$process->getErrorOutput();
+
+            self::assertNotSame(0, $process->getExitCode(), $diagnostics);
+            self::assertStringContainsString('[qality-plus] PHPUnit extension error during bootstrap.', $diagnostics);
+            self::assertStringContainsString('mapping file', $diagnostics);
+            self::assertStringContainsString('Trace:', $diagnostics);
+        } finally {
+            $this->removeFiles($directory, $configuration);
+        }
+    }
+
+    public function test_result_write_errors_are_visible_in_process_diagnostics(): void
+    {
+        $root = dirname(__DIR__, 2);
+        $directory = tempnam(sys_get_temp_dir(), 'qality-extension-result-');
+        self::assertNotFalse($directory);
+        $directory = (string) $directory;
+        $configuration = $directory.'.xml';
+        $xml = <<<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit bootstrap="%s" colors="false">
+    <testsuites>
+        <testsuite name="extension-diagnostics">
+            <file>%s</file>
+        </testsuite>
+    </testsuites>
+    <extensions>
+        <bootstrap class="Threadable\QalityPlus\PhpUnit\QalityPlusExtension">
+            <parameter name="directory" value="%s"/>
+        </bootstrap>
+    </extensions>
+</phpunit>
+XML;
+        $xml = sprintf(
+            $xml,
+            $this->xmlPath($root.'/vendor/autoload.php'),
+            $this->xmlPath(__DIR__.'/../Fixtures/ExtensionFixtureTest.php'),
+            $this->xmlPath($directory),
+        );
+        file_put_contents($configuration, $xml);
+
+        try {
+            $process = new Process([
+                PHP_BINARY,
+                $root.'/vendor/bin/phpunit',
+                '--configuration',
+                $configuration,
+                '--filter',
+                'test_annotated_passes',
+            ], $root);
+            $process->run();
+
+            $diagnostics = $process->getOutput().$process->getErrorOutput();
+
+            self::assertSame(0, $process->getExitCode(), $diagnostics);
+            self::assertStringContainsString('[qality-plus] PHPUnit extension error during writing a test result.', $diagnostics);
+            self::assertStringContainsString('Unable to create QAlity result directory', $diagnostics);
+            self::assertStringContainsString('result_path=', $diagnostics);
+        } finally {
+            $this->removeFiles($directory, $configuration);
+        }
+    }
+
     private function xmlPath(string $path): string
     {
         return htmlspecialchars($path, ENT_XML1 | ENT_QUOTES, 'UTF-8');
@@ -91,6 +194,8 @@ XML;
 
         if (is_dir($directory)) {
             rmdir($directory);
+        } elseif (is_file($directory)) {
+            unlink($directory);
         }
 
         if (is_file($configuration)) {

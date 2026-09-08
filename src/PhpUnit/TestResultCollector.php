@@ -71,19 +71,32 @@ final class TestResultCollector
     public function finished(Finished $event): void
     {
         $id = $event->test()->id();
-        $result = $this->results[$id] ?? [
-            'status' => 'unknown',
-        ];
 
-        $result['test'] = $this->testDetails($event->test());
-        $result['duration_ms'] = $this->durationMs($id, $event);
-        $result['assertions'] = $event->numberOfAssertionsPerformed();
-        $result['qality'] = $this->metadataResolver->resolve($event->test());
+        try {
+            $result = $this->results[$id] ?? [
+                'status' => 'unknown',
+            ];
+
+            $result['test'] = $this->testDetails($event->test());
+            $result['duration_ms'] = $this->durationMs($id, $event);
+            $result['assertions'] = $event->numberOfAssertionsPerformed();
+            $result['qality'] = $this->metadataResolver->resolve($event->test());
+        } catch (Throwable $exception) {
+            ExtensionDiagnostics::report('building a test result', $exception, [
+                'test_id' => $id,
+                'result_path' => $this->writer->path(),
+            ]);
+
+            throw $exception;
+        }
 
         try {
             $this->writer->write($result);
         } catch (Throwable $exception) {
-            fwrite(STDERR, '[qality-plus] '.$exception->getMessage().PHP_EOL);
+            ExtensionDiagnostics::report('writing a test result', $exception, [
+                'test_id' => $id,
+                'result_path' => $this->writer->path(),
+            ]);
         }
 
         unset($this->results[$id], $this->startedAt[$id]);

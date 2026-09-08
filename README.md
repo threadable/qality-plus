@@ -155,6 +155,11 @@ php artisan qality:create-test-cases --branch feature/PROJ-123-checkout --dry-ru
 php artisan qality:publish --dry-run
 ```
 
+If the PHPUnit extension cannot initialize or record a result, it writes a
+diagnostic to `stderr`. The message includes the failing stage, worker process
+ID, configured result path, exception location, and stack trace, so it remains
+visible when tests are run with `php artisan test --parallel`.
+
 If an upstream request fails, inspect the Laravel application log (normally
 `storage/logs/laravel.log`) and search for `qality-plus`. Entries identify
 whether the failure occurred in QAlity Plus or Jira, the configured host and
