@@ -126,17 +126,27 @@ cases are linked to their requirement or the branch work item. `linkType` and
 
 ### Creation and linking scenarios
 
-The mapping file is checked first. If it contains the exact `test.id`, its
-`issue_key` is trusted and the case is not looked up, created, linked, or
-labeled. For all other results, the create command follows this behavior:
+The create command first selects or creates the QAlity case:
 
-| Scenario | QAlity case created? | Jira link target | Result |
-| --- | --- | --- | --- |
-| Mapping-file entry exists | No | None | The mapped case is assumed to be correctly linked. |
-| Existing case has `threadable-qality-plus` | No | None | The case is reused and not linked to the current branch or requirement. |
-| Existing case lacks the created-case label and has `requirementIssueKey` | No | The requirement key | The requirement link is created if missing, then the created-case label is added. |
-| Existing case lacks the created-case label and has no requirement key | No | The feature branch work item | The branch link is created if missing, then the created-case label is added. |
-| No existing case is found | Yes | `requirementIssueKey`, otherwise the feature branch work item | The case is imported, linked, labeled, and its issue key is saved to the mapping file. |
+| Case lookup | Action |
+| --- | --- |
+| Exact `test.id` exists in the mapping file | Reuse the mapped `issue_key`; do not look up, create, link, or label it. |
+| The result already contains an `issue_key` | Reuse that QAlity case. |
+| Jira lookup finds one existing case | Reuse it and save its key to the mapping file. |
+| No existing case is found | Create it and save the returned key to the mapping file. |
+
+It then applies the link rule:
+
+| Case | Created-case label present? | Link target |
+| --- | --- | --- |
+| Mapping-file case | Any | No link is created; the mapping is trusted. |
+| Existing case | Yes | No link is added. |
+| Existing case | No | `requirementIssueKey`, otherwise the feature branch work item. |
+| Newly created case | Not applicable | `requirementIssueKey`, otherwise the feature branch work item. |
+
+After an unlabeled existing case is linked, the created-case label is added so
+later feature-branch runs do not link it again. Newly created cases receive the
+same label after import and linking.
 
 For the branch fallback, `--work-item` takes precedence over `--branch`; when
 neither is supplied, the command parses the Jira key from a branch such as
