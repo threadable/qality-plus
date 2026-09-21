@@ -126,6 +126,15 @@ php artisan qality:publish
 </code-snippet>
 @endverbatim
 
+The create command checks the mapping file before Jira. A mapped test is
+assumed to already exist and be linked, so it is not looked up, linked, or
+imported. For other existing cases, `threadable-qality-plus` protects a case
+from additional links: cases with that label are reused without a link; cases
+without it are linked to `requirementIssueKey` when present, otherwise to the
+feature-branch work item. Newly created cases are linked using the same
+requirement-first, branch-fallback rule. Cases linked by the command receive
+the created-case label so later branch runs do not link them again.
+
 Both commands default to `storage/qality`. Use `--dry-run` to validate results
 without making QAlity Plus or Jira requests.
 

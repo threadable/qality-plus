@@ -24,7 +24,7 @@ final class CreateQalityTestCasesCommand extends Command
         {--mapping-file= : JSON mapping file; defaults to .qality-test-map.json}
         {--dry-run : Validate and summarize without calling QAlity or Jira}';
 
-    protected $description = 'Create missing QAlity test cases and link them to the branch work item';
+    protected $description = 'Create missing QAlity test cases and link eligible cases to the branch work item';
 
     public function handle(QalityClient $qality, JiraClient $jira): int
     {

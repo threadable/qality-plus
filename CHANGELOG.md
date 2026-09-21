@@ -7,11 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-09-21
+
 ### Fixed
 
+- Avoid linking QAlity test cases already marked with the created-case label to later feature branches.
+- Link previously unlabeled existing cases once, then mark them to prevent repeat branch links.
 - Fall back to namespace-safe Jira name searches for Pest-generated test names.
 - Resolve test cases by deterministic Jira labels derived from result test IDs.
 - Ignore PHPUnit event-facade sealing during Pest/ParaTest controller bootstraps.
+
+### Documentation
+
+- Document QAlity case creation, mapping, requirement-link, and feature-branch-link scenarios.
 
 ## [1.0.3] - 2026-09-08
 

@@ -30,7 +30,8 @@ final class CreateTestCasesService
         $mappingStore = new TestCaseMappingStore($mappingPath);
         $mappings = $mappingStore->load();
         $eligible = [];
-        $linkCandidates = [];
+        $existingLinkCandidates = [];
+        $existingCases = [];
         $seen = [];
         $skipped = 0;
         $resolvedMappings = false;
@@ -77,11 +78,16 @@ final class CreateTestCasesService
             }
 
             if ($this->hasIssueKey($record)) {
-                $linkCandidates[] = $this->linkCandidate(
-                    (string) $record['qality']['issue_key'],
-                    $record,
-                    $workItemKey,
-                );
+                $issueKey = (string) $record['qality']['issue_key'];
+                $existingCases[] = [
+                    'test_case_key' => $issueKey,
+                    'test_id' => $testId,
+                ];
+
+                if ($this->shouldLinkExistingCase($issueKey)) {
+                    $existingLinkCandidates[] = $this->linkCandidate($issueKey, $record, $workItemKey);
+                }
+
                 $skipped++;
 
                 continue;
@@ -93,7 +99,15 @@ final class CreateTestCasesService
                 $mappings[$testId] = ['issue_key' => $issueKey];
                 $resolvedMappings = true;
                 $resolvedMappingCount++;
-                $linkCandidates[] = $this->linkCandidate($issueKey, $record, $workItemKey);
+                $existingCases[] = [
+                    'test_case_key' => $issueKey,
+                    'test_id' => $testId,
+                ];
+
+                if ($this->shouldLinkExistingCase($issueKey)) {
+                    $existingLinkCandidates[] = $this->linkCandidate($issueKey, $record, $workItemKey);
+                }
+
                 $skipped++;
 
                 continue;
@@ -140,17 +154,20 @@ final class CreateTestCasesService
 
         $linked = 0;
 
-        if ($linkCandidates !== []) {
+        if ($existingCases !== []) {
+            $this->labelCases($existingCases);
+        }
+
+        if ($existingLinkCandidates !== []) {
             Log::info('qality-plus Jira test-case linking started', [
                 'work_item' => $workItemKey,
-                'test_case_count' => count($linkCandidates),
+                'test_case_count' => count($existingLinkCandidates),
                 'source' => 'existing',
             ]);
-            $linked = $this->linkCases($linkCandidates);
-            $this->labelCases($linkCandidates);
+            $linked = $this->linkCases($existingLinkCandidates);
             Log::info('qality-plus Jira test-case linking completed', [
                 'work_item' => $workItemKey,
-                'test_case_count' => count($linkCandidates),
+                'test_case_count' => count($existingLinkCandidates),
                 'linked_count' => $linked,
                 'source' => 'existing',
             ]);
@@ -469,6 +486,21 @@ final class CreateTestCasesService
         return is_string($requirementIssueKey) && trim($requirementIssueKey) !== ''
             ? trim($requirementIssueKey)
             : null;
+    }
+
+    private function shouldLinkExistingCase(string $testCaseKey): bool
+    {
+        $createdTestLabel = $this->options['created_test_label'] ?? null;
+        $createdTestLabel = is_string($createdTestLabel) ? trim($createdTestLabel) : '';
+
+        if ($createdTestLabel === '') {
+            return true;
+        }
+
+        $issue = $this->jira->issue($testCaseKey);
+        $labels = $issue['fields']['labels'] ?? [];
+
+        return ! is_array($labels) || ! in_array($createdTestLabel, $labels, true);
     }
 
     private function importBatchSize(): int

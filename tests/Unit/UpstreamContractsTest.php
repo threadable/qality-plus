@@ -110,7 +110,7 @@ final class UpstreamContractsTest extends TestCase
         self::assertSame($issueResponse, $client->issue('T2M-41'));
         $client->createIssueLink('T2M-41', 'T2M-12', 'QAlity Test');
 
-        Http::assertSent(static fn ($request): bool => $request->url() === 'https://jira.contract/rest/api/3/issue/T2M-41?fields=issuelinks,project,issuetype'
+        Http::assertSent(static fn ($request): bool => $request->url() === 'https://jira.contract/rest/api/3/issue/T2M-41?fields=issuelinks,project,issuetype,labels'
             && $request->method() === 'GET'
             && $request->header('Authorization') === ['Basic '.base64_encode('ci@example.com:jira-token')]);
         Http::assertSent(static fn ($request): bool => $request->url() === 'https://jira.contract/rest/api/3/issueLink'

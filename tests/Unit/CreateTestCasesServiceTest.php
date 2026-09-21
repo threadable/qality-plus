@@ -134,6 +134,50 @@ final class CreateTestCasesServiceTest extends TestCase
         self::assertSame([['QA-123', 'NDCPR-33', 'Tests', 'test_to_requirement']], $jira->createdLinks);
     }
 
+    public function test_it_links_an_existing_case_without_the_created_label_to_the_branch_work_item(): void
+    {
+        $path = $this->temporaryMappingPath();
+        $qality = new CreateFakeQalityClient;
+        $jira = new CreateFakeJiraClient;
+        $service = new CreateTestCasesService($qality, $jira, [
+            'project_id' => '20001',
+            'link_type' => 'Tests',
+        ]);
+
+        $summary = $service->create([[
+            'test' => ['id' => 'CheckoutTest::test_checkout', 'name' => 'test_checkout'],
+            'qality' => ['issue_key' => 'QA-123'],
+        ]], 'PROJ-123', $path);
+
+        self::assertSame(0, $summary->eligible);
+        self::assertSame(1, $summary->skipped);
+        self::assertSame(1, $summary->linked);
+        self::assertSame([['QA-123', 'PROJ-123', 'Tests', 'test_to_requirement']], $jira->createdLinks);
+    }
+
+    public function test_it_does_not_link_an_existing_case_with_the_created_label(): void
+    {
+        $path = $this->temporaryMappingPath();
+        $qality = new CreateFakeQalityClient;
+        $jira = new CreateFakeJiraClient;
+        $jira->issueLabelsByKey['QA-123'] = ['threadable-qality-plus'];
+        $service = new CreateTestCasesService($qality, $jira, [
+            'project_id' => '20001',
+            'link_type' => 'Tests',
+            'created_test_label' => 'threadable-qality-plus',
+        ]);
+
+        $summary = $service->create([[
+            'test' => ['id' => 'CheckoutTest::test_checkout', 'name' => 'test_checkout'],
+            'qality' => ['issue_key' => 'QA-123'],
+        ]], 'PROJ-123', $path);
+
+        self::assertSame(0, $summary->eligible);
+        self::assertSame(1, $summary->skipped);
+        self::assertSame(0, $summary->linked);
+        self::assertSame([], $jira->createdLinks);
+    }
+
     public function test_it_uses_a_class_qualified_name_when_creating_a_missing_phpunit_case(): void
     {
         $path = $this->temporaryMappingPath();
@@ -478,9 +522,16 @@ final class CreateFakeJiraClient implements JiraAutomationTestCaseLookup, JiraBu
     /** @var list<list<string>> */
     public array $addedLabels = [];
 
+    /** @var array<string, list<string>> */
+    public array $issueLabelsByKey = [];
+
     public function issue(string $issueKey): array
     {
-        return ['id' => '10001', 'key' => $issueKey];
+        return [
+            'id' => '10001',
+            'key' => $issueKey,
+            'fields' => ['labels' => $this->issueLabelsByKey[$issueKey] ?? []],
+        ];
     }
 
     public function findTestCaseKeysByName(string $name, string $projectKey, string $issueType): array

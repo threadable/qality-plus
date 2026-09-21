@@ -125,12 +125,28 @@ map their generated test IDs to existing QAlity issue keys. Mapped cases are
 assumed to already have their required links. A custom `name` is currently
 available through the PHPUnit attribute, not through a Pest mapping entry.
 
-For `qality:create-test-cases`, the link target is resolved per test for newly
-imported cases and cases resolved from Jira. An attribute
-`requirementIssueKey` takes precedence over the `--work-item` or branch work
-item. If no requirement is annotated, the work item is used as the fallback.
-Cases supplied by the mapping file are assumed to already have their expected
-link and are not reconciled.
+For `qality:create-test-cases`, newly imported cases are linked to the
+annotated requirement, or to the `--work-item` or branch work item when no
+requirement is annotated. Cases already found in QAlity are checked for
+`QALITY_JIRA_CREATED_TEST_LABEL` (default: `threadable-qality-plus`). Cases
+with that label are not linked; cases without it are linked to their annotated
+requirement or the branch work item. Cases supplied by the mapping file are
+assumed to already have their expected link and are not reconciled.
+
+The decision order is:
+
+| Case state | Created in QAlity? | Link behavior |
+| --- | --- | --- |
+| Exact `test.id` exists in the mapping file | No | Trust the mapped `issue_key`; do not look up, link, label, or import it. |
+| Existing QAlity case has `QALITY_JIRA_CREATED_TEST_LABEL` | No | Reuse it without adding a requirement or feature-branch link. |
+| Existing case has no created-case label and has `requirementIssueKey` | No | Link it to the requirement key, then add the created-case label. |
+| Existing case has no created-case label and no requirement key | No | Link it to the branch work item, then add the created-case label. |
+| No matching case is found | Yes | Import it, link it to `requirementIssueKey` when present or the branch work item otherwise, and save its issue key. |
+
+The branch work item is the value passed through `--work-item`, or the Jira
+key parsed from `--branch`; `--work-item` takes precedence. This means an
+unlabeled existing case is linked once, receives the created-case label, and is
+then protected from linking on later feature-branch runs.
 
 The attribute can also override the global link settings for one test:
 

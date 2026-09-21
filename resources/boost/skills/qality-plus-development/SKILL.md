@@ -33,7 +33,8 @@ one is configured, then can resolve an exact test-case name through Jira when
 ambiguous matches must be reported rather than selected arbitrarily.
 
 The create command creates a missing QAlity case only when no matching case is
-found. The publish command skips an unresolved result. Newly created cases can
+found. The publish command skips an unresolved result. Cases with the created
+test label are not linked again; unlabeled existing and newly created cases can
 be linked to the Jira work item parsed from the branch name.
 
 ## Safe verification

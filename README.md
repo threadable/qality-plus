@@ -117,10 +117,32 @@ issue key is already available, the case is treated as existing and its name
 is not changed.
 
 `requirementIssueKey` is the source of truth for the Jira issue linked to that
-test. It overrides the `--work-item` value. When it is omitted, the branch
-work item is used as the fallback. This applies to both newly created and
-already existing QAlity test cases. `linkType` and `linkDirection` can override
-the configured defaults for an individual test.
+test. For a newly created QAlity case, it overrides the `--work-item` value;
+when it is omitted, the branch work item is used as the fallback. For an
+existing case, the package checks `QALITY_JIRA_CREATED_TEST_LABEL` (default:
+`threadable-qality-plus`): labeled cases are not linked again, while unlabeled
+cases are linked to their requirement or the branch work item. `linkType` and
+`linkDirection` can override the configured defaults for an individual test.
+
+### Creation and linking scenarios
+
+The mapping file is checked first. If it contains the exact `test.id`, its
+`issue_key` is trusted and the case is not looked up, created, linked, or
+labeled. For all other results, the create command follows this behavior:
+
+| Scenario | QAlity case created? | Jira link target | Result |
+| --- | --- | --- | --- |
+| Mapping-file entry exists | No | None | The mapped case is assumed to be correctly linked. |
+| Existing case has `threadable-qality-plus` | No | None | The case is reused and not linked to the current branch or requirement. |
+| Existing case lacks the created-case label and has `requirementIssueKey` | No | The requirement key | The requirement link is created if missing, then the created-case label is added. |
+| Existing case lacks the created-case label and has no requirement key | No | The feature branch work item | The branch link is created if missing, then the created-case label is added. |
+| No existing case is found | Yes | `requirementIssueKey`, otherwise the feature branch work item | The case is imported, linked, labeled, and its issue key is saved to the mapping file. |
+
+For the branch fallback, `--work-item` takes precedence over `--branch`; when
+neither is supplied, the command parses the Jira key from a branch such as
+`feature/PROJ-123-checkout`. The created-case label defaults to
+`threadable-qality-plus` and can be changed with
+`QALITY_JIRA_CREATED_TEST_LABEL`.
 
 ## CI/CD commands
 
@@ -217,14 +239,15 @@ precedence over `--branch`.
 
 | Pipeline stage | Command | Result |
 | --- | --- | --- |
-| Feature branch | `qality:create-test-cases` | Finds existing cases or creates missing cases and links each case to its annotated requirement, or to the branch work item when no requirement is annotated |
+| Feature branch | `qality:create-test-cases` | Finds existing cases or creates missing cases; labeled existing cases are not linked, while unlabeled existing and newly created cases are linked to their requirement or the branch work item |
 | QA, UAT, production | `qality:publish` | Creates a QAlity Test Cycle and publishes passed, failed, and skipped executions |
 
 Store QAlity and Jira credentials as secured CI/CD variables. The package does
 not require a particular CI/CD provider.
 
 Created and resolved QAlity test cases receive their automatic identity label.
-Newly created cases also receive `threadable-qality-plus` by default. Set
+Newly created cases and existing cases linked by the create command also receive
+`threadable-qality-plus` by default. Set
 `QALITY_JIRA_CREATED_TEST_LABEL=` to disable that additional label; the
 identity label is always managed by the package.
 

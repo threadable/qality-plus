@@ -25,7 +25,7 @@ final class HttpJiraClient extends HttpTransport implements JiraAccessVerifier, 
 
     public function issue(string $issueKey): array
     {
-        return $this->sendJira('GET', '/rest/api/3/issue/'.rawurlencode($issueKey).'?fields=issuelinks,project,issuetype');
+        return $this->sendJira('GET', '/rest/api/3/issue/'.rawurlencode($issueKey).'?fields=issuelinks,project,issuetype,labels');
     }
 
     public function verifyAccess(string $projectKey): void
