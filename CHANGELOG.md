@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-09-28
+
+### Fixed
+
+- Correct the issue-link payload for `test_to_requirement`: the QAlity Test
+  issue is sent as `inwardIssue` and the requirement as `outwardIssue`, so the
+  configured `tests` and `is tested by` descriptions are displayed correctly.
+
 ## [1.0.5] - 2026-09-21
 
 ### Fixed

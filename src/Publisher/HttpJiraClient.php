@@ -234,8 +234,10 @@ final class HttpJiraClient extends HttpTransport implements JiraAccessVerifier, 
             throw new PublisherException('Jira issue-link direction must be test_to_requirement or requirement_to_test.');
         }
 
-        $outward = $direction === 'test_to_requirement' ? $testIssueKey : $requirementIssueKey;
-        $inward = $direction === 'test_to_requirement' ? $requirementIssueKey : $testIssueKey;
+        // Keep the payload aligned with the configured test-to-requirement
+        // relationship and the link descriptions configured in Jira.
+        $outward = $direction === 'test_to_requirement' ? $requirementIssueKey : $testIssueKey;
+        $inward = $direction === 'test_to_requirement' ? $testIssueKey : $requirementIssueKey;
 
         $this->sendJira('POST', '/rest/api/3/issueLink', [
             'type' => ['name' => $linkType],

@@ -228,6 +228,11 @@ inward description. For a Jira link type shown as
 `QAlity Test | tests | is tested by`, use `QAlity Test` and
 `test_to_requirement`.
 
+The package maps `test_to_requirement` to the configured `tests` and
+`is tested by` descriptions. Older package versions sent the two link sides
+in the opposite order; version 1.0.6 uses the corrected mapping for new
+links.
+
 `QALITY_JIRA_LINKS_ENABLED` controls optional requirement links while
 publishing executions. The create command always honors an explicit
 `requirementIssueKey` and uses its work-item fallback, regardless of this

@@ -79,8 +79,8 @@ final class HttpClientsTest extends TestCase
                 && $request->header('Authorization') === ['Basic '.base64_encode('ci@example.com:jira-token')]
                 && $request->data() === [
                     'type' => ['name' => 'Tests'],
-                    'inwardIssue' => ['key' => 'REQ-42'],
-                    'outwardIssue' => ['key' => 'QA-123'],
+                    'inwardIssue' => ['key' => 'QA-123'],
+                    'outwardIssue' => ['key' => 'REQ-42'],
                 ];
         });
     }

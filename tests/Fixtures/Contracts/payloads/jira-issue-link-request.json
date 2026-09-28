@@ -1,5 +1,5 @@
 {
     "type": {"name": "QAlity Test"},
-    "inwardIssue": {"key": "T2M-12"},
-    "outwardIssue": {"key": "T2M-41"}
+    "inwardIssue": {"key": "QA-41"},
+    "outwardIssue": {"key": "QA-12"}
 }

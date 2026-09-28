@@ -1,9 +1,9 @@
 {
     "id": "76768",
-    "key": "T2M-41",
+    "key": "QA-41",
     "fields": {
         "issuelinks": [],
-        "project": {"id": "10157", "key": "T2M", "name": "Turn2Me Platform"},
+        "project": {"id": "10157", "key": "QA", "name": "Quality Platform"},
         "issuetype": {"id": "10245", "name": "QAlity Test"}
     }
 }
